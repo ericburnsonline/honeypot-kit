@@ -1,0 +1,84 @@
+NOTICE OF THIRD-PARTY SOFTWARE AND LICENSING
+
+This project includes the following third-party software:
+
+---
+
+COWRIE SSH HONEYPOT (GPL v2)
+────────────────────────────
+
+Website: https://github.com/cowrie/cowrie
+License: GNU General Public License v2
+License Text: https://github.com/cowrie/cowrie/blob/master/LICENSE.txt
+
+This software is provided "as is" without warranty.
+
+Attribution: Honeypot Kit uses the Cowrie SSH honeypot as its foundation.
+Cowrie is an excellent educational SSH honeypot project developed by the
+Cowrie community.
+
+For Cowrie licensing questions, see: https://github.com/cowrie/cowrie/blob/master/LICENSE.txt
+
+---
+
+HONEYPOT KIT LICENSING
+──────────────────────
+
+Primary License: GNU Affero General Public License v3 (AGPL v3)
+
+This project is licensed under AGPL v3 for open source and educational use.
+
+Commercial Use: Available under separate commercial license agreement.
+For commercial licensing inquiries, contact: burns@interhouse.com
+
+---
+
+FASTAPI (MIT License)
+────────────────────
+
+Website: https://github.com/tiangolo/fastapi
+License: MIT License (permissive open source)
+Copyright: Sebastián Ramírez
+
+---
+
+PYTHON (PSF License)
+──────────────────
+
+Website: https://www.python.org
+License: Python Software Foundation License (permissive open source)
+
+---
+
+OTHER LIBRARIES
+
+This project may include other open source software. All dependencies
+are specified in requirements.txt and are compatible with AGPL v3.
+
+---
+
+LICENSING MODEL
+───────────────
+
+Open Source (AGPL v3):
+  - Free for open source projects
+  - Free for educational use
+  - Free for non-commercial use
+  - Required: Share modifications
+  - Required: Provide source code access
+
+Commercial License:
+  - Available for proprietary use
+  - Allows closed-source modifications
+  - Contact for pricing and terms
+  - Includes support options
+
+---
+
+COMPLIANCE NOTE
+
+Use of this software constitutes acceptance of the terms in LICENSE file
+and the AGPL v3 license. For proprietary or commercial use requiring
+closed-source modifications, a commercial license is required.
+
+Contact: burns@interhouse.com

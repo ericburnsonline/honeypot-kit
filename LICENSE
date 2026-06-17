@@ -1,0 +1,52 @@
+GNU AFFERO GENERAL PUBLIC LICENSE
+Version 3, 19 November 2007
+
+Copyright (C) 2026 Eric Burns
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+---
+
+COMPLETE LICENSE TEXT:
+
+https://www.gnu.org/licenses/agpl-3.0.txt
+
+(Full text available above link - too long to reproduce here)
+
+---
+
+SUMMARY OF AGPL v3:
+
+1. FREEDOM TO USE: You can use this software freely for any purpose.
+
+2. FREEDOM TO MODIFY: You can modify the source code.
+
+3. FREEDOM TO DISTRIBUTE: You can distribute copies.
+
+4. CONDITIONS:
+   - If you modify it: You must share your modifications (copyleft)
+   - If you use it as a service: You must provide source code access (network clause)
+   - You must include this license
+   - You must provide source code to users
+   - You must document changes
+
+5. COMMERCIAL USE:
+   - Open source use: Always free, must comply with AGPL terms
+   - Proprietary use: Available under commercial license
+   - Contact: [your email] for commercial licensing inquiries
+
+---
+
+This license ensures the software remains free and open while allowing
+commercial licensing for companies that need proprietary modifications.

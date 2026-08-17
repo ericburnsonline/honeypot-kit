@@ -4,7 +4,7 @@ Educational SSH honeypot with modular hardware monitoring for Raspberry Pi.
 
 Deploy in 15-20 minutes. Monitor attacks in real-time with OLED display, LED indicators, and push-button control.
 
-⚠️ **Status:** Vibe coded, untested on hardware. Community testing welcome. See [Threat Model](docs/THREAT_MODEL.md) for design scope.
+⚠️ **Status:** Install script tested and working on RPi4 64-bit Debian Trixie. Hardware modules in development. See [Threat Model](docs/THREAT_MODEL.md) for design scope.
 
 ## What It Does
 
@@ -62,7 +62,7 @@ This is a learning tool first, production monitoring second.
 
 ### Optional Hardware Modules
 - OLED display (SSD1306 I2C) - ~$10-15
-- LEDs + resistors - ~$3-5
+- LED traffic light module (built-in resistors) - ~$4-8
 - Push button + resistor - ~$1-2
 
 **Estimated Cost (as of 2026):**
@@ -76,7 +76,7 @@ Note: Prices fluctuate due to chip shortages and supply chain. Check current pri
 ```
 Honeypot Kit on Raspberry Pi
 ├── Cowrie SSH Honeypot
-│   ├── Listens on port 2222
+│   ├── Listens on port 22
 │   ├── Logs all SSH attempts
 │   └── Records attacker commands
 ├── Health Monitor
@@ -97,7 +97,7 @@ Honeypot Kit on Raspberry Pi
 
 ```bash
 # On Raspberry Pi
-wget https://raw.githubusercontent.com/ericburnsonline/honeypot-kit/main/scripts/install-honeypot.sh
+wget https://raw.githubusercontent.com/ericburnsonline/honeypot-kit/main/install-honeypot.sh
 sudo bash install-honeypot.sh
 ```
 
@@ -105,10 +105,10 @@ Follow prompts for network interface, hostname, and firewall configuration.
 
 ## Roadmap
 
-**Phase 1 (Now):** Core honeypot + hardware modules  
-**Phase 2:** Grafana dashboard for visualization  
-**Phase 3:** Kafka event streaming  
-**Phase 4:** Claude AI analysis  
+**Phase 1 (Now):** Core honeypot + hardware modules
+**Phase 2:** Grafana dashboard for visualization
+**Phase 3:** Kafka event streaming
+**Phase 4:** Claude AI analysis
 **Phase 5+:** Kubernetes and multi-honeypot coordination
 
 18 total modules planned. See documentation as project grows.
@@ -149,7 +149,7 @@ See NOTICE file for complete attribution.
 ## Next Steps
 
 1. **Get a Raspberry Pi 4** (4GB minimum)
-2. **Flash Raspberry Pi OS Bookworm**
+2. **Flash Raspberry Pi OS 64-bit (Debian Trixie)**
 3. **Watch this repository** for documentation updates
 4. **Follow installation guide** when available
 

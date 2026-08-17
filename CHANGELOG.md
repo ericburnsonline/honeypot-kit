@@ -10,10 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Unreleased
 
 ### In Progress
-- Installation script (v2) - active development and testing on Raspberry Pi 4
 - Hardware module implementations (OLED, LED, Button)
 - Dashboard integration framework
-- Testing and validation procedures
+- Smoke test script bug fix (line 32 heredoc escaping issue)
 
 ### Planned (Phase 2-5)
 - Grafana dashboard for attack visualization
@@ -21,6 +20,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Claude AI analysis of attack patterns
 - Kubernetes orchestration support
 - Multi-honeypot coordination
+
+---
+
+## [0.2.0] - 2026-08-16
+
+### Added
+- `install-honeypot.sh` - first working install script, confirmed on RPi4
+  64-bit Debian Trixie (2026-06-18)
+- Cowrie SSH honeypot deployed on port 22 via authbind
+- Real SSH auto-configured to user-selected port (default 2222) with
+  validation (range, in-use check, well-known port warning)
+- Random OPSEC-friendly hostname suggestion from realistic pool with
+  user override
+- Systemd service with forking type, PIDFile tracking, and
+  network-online.target dependency
+- authbind configured automatically so Cowrie can bind to port 22
+  as unprivileged user
+- Smoke test script (known issue: line 32 bug to be fixed in next commit)
+- Health check script running every 5 minutes via cron
+- nmap installed for local port verification
+- Reboot prompt at end of install with warning if declined
+- Unattended install timing displayed at completion
+- Invocation check - detects if not run as `sudo bash` and exits cleanly
+
+### Known Issues
+- smoke-test.sh line 32 fails due to heredoc escaping bug - Cowrie
+  and all other functionality unaffected
 
 ---
 
@@ -33,7 +59,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added - July 3, 2026
 - Contributing Guidelines with clear pathways for community contribution
-- Six concrete ways to contribute (testing, hardware design, docs, dashboards, modules, SE perspective)
+- Six concrete ways to contribute (testing, hardware design, docs,
+  dashboards, modules, SE perspective)
 - Development workflow and code style expectations
 - Licensing requirements and recognition process
 
@@ -44,48 +71,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Threat Model documenting project scope and design boundaries
 - Attribution and compliance notices for Cowrie (GPL v2) and dependencies
 - .gitignore configured for Python projects
-
-### Project Foundation Status
-
-**Architecture & Design (Documented)**
-- Modular architecture supporting 18+ planned modules across 5 phases
-- Hardware module trio designed: OLED display, LED indicators, Button control
-- GPIO compatibility matrix to prevent hardware conflicts
-- Health check framework (5-minute intervals)
-- Log rotation strategy (7-day retention)
-- OPSEC hardening framework
-- Firewall and network isolation design
-
-**Installation Script (In Testing)**
-- Version 1 created and deployed to Raspberry Pi 4
-- v2 improvements in progress based on testing feedback
-- Known issues being resolved
-
-**Ready for Community**
-- Licensing and legal foundation solid
-- Community guidelines and governance established
-- Contributing pathways clear
-- Project vision transparent
-- Honest about current maturity (vibe coded, untested)
-
-**Not Yet Available**
-- Tested, production-ready installation
-- Actual module implementations
-- Dashboard or visualization tools
-- Kubernetes support
-
----
-
-## Notes
-
-**Version 0.1.0 represents the foundation phase:**
-- Project governance and community structure established (June 16 - July 13)
-- Architecture and vision documented
-- Building blocks established
-- Ready for contributors and community feedback
-- Installation script in active testing and iteration
-
-**Next milestone (0.2.0):** Working installation script with successful Cowrie deployment on Raspberry Pi 4.
 
 ---
 

@@ -38,6 +38,16 @@ VALID_I2C_ADDRESSES   = ["0x3C", "0x3D"]
 VALID_GPIO_PINS       = list(range(2, 28))
 
 
+def require_root():
+    """Exit with a clear message if not running as root."""
+    if os.geteuid() != 0:
+        click.echo("")
+        click.echo("ERROR: This command requires root.")
+        click.echo("  Run as: sudo honeypot-kit " + " ".join(sys.argv[1:]))
+        click.echo("")
+        sys.exit(1)
+
+
 def load_config():
     config = configparser.ConfigParser()
     if os.path.exists(CONF_FILE):
@@ -142,6 +152,7 @@ def oled():
 @oled.command()
 def enable():
     """Enable the OLED display."""
+    require_root()
     config = load_config()
     config["oled"]["enabled"] = "true"
     save_config(config)
@@ -152,6 +163,7 @@ def enable():
 @oled.command()
 def disable():
     """Disable the OLED display."""
+    require_root()
     config = load_config()
     config["oled"]["enabled"] = "false"
     save_config(config)
@@ -163,6 +175,7 @@ def disable():
 @click.argument("address")
 def oled_set_address(address):
     """Set the I2C address (0x3C or 0x3D)."""
+    require_root()
     if address not in VALID_I2C_ADDRESSES:
         click.echo(f"ERROR: Invalid I2C address '{address}'.")
         click.echo(f"  Valid options : {', '.join(VALID_I2C_ADDRESSES)}")
@@ -191,6 +204,7 @@ def oled_set_resolution(resolution):
 @oled.command()
 def test():
     """Test the OLED display with a status screen."""
+    require_root()
     config = load_config()
     addr_str = config["oled"].get("i2c_address", "0x3C")
     res      = config["oled"].get("resolution",  "128x64")
@@ -246,6 +260,7 @@ def led():
 @led.command()
 def enable():
     """Enable the LED status indicators."""
+    require_root()
     config = load_config()
     config["led"]["enabled"] = "true"
     save_config(config)
@@ -256,6 +271,7 @@ def enable():
 @led.command()
 def disable():
     """Disable the LED status indicators."""
+    require_root()
     config = load_config()
     config["led"]["enabled"] = "false"
     save_config(config)
@@ -269,6 +285,7 @@ def disable():
 @click.option("--green",  type=int, required=True, help="BCM GPIO pin for green LED")
 def led_set_pins(red, yellow, green):
     """Set GPIO pins for each LED (BCM numbering)."""
+    require_root()
     pins = {"red": red, "yellow": yellow, "green": green}
     for name, pin in pins.items():
         if pin not in VALID_GPIO_PINS:
@@ -291,6 +308,7 @@ def led_set_pins(red, yellow, green):
 @led.command()
 def test():
     """Test LEDs by flashing each one in sequence."""
+    require_root()
     config = load_config()
     pin_red    = int(config["led"].get("pin_red",    "17"))
     pin_yellow = int(config["led"].get("pin_yellow", "27"))
@@ -346,6 +364,7 @@ def monitor():
 @monitor.command()
 def start():
     """Start the hardware monitor service."""
+    require_root()
     ok, err = _systemctl("start")
     if ok:
         click.echo("Monitor service started.")
@@ -360,6 +379,7 @@ def start():
 @monitor.command()
 def stop():
     """Stop the hardware monitor service."""
+    require_root()
     ok, err = _systemctl("stop")
     if ok:
         click.echo("Monitor service stopped.")
@@ -371,6 +391,7 @@ def stop():
 @monitor.command()
 def restart():
     """Restart the hardware monitor service."""
+    require_root()
     ok, err = _systemctl("restart")
     if ok:
         click.echo("Monitor service restarted.")
@@ -437,6 +458,7 @@ def status():
 @update.command()
 def now():
     """Run an update check immediately."""
+    require_root()
     update_script = "/opt/honeypot/scripts/honeypot-update.sh"
     if not os.path.exists(update_script):
         click.echo("ERROR: Update script not found.")
@@ -463,6 +485,7 @@ def now():
 @update.command()
 def enable():
     """Enable automatic weekly updates."""
+    require_root()
     ok, err = _systemctl("enable", "honeypot-update.timer")
     ok2, _  = _systemctl("start",  "honeypot-update.timer")
     if ok and ok2:
@@ -485,6 +508,7 @@ def enable():
 @update.command()
 def disable():
     """Disable automatic weekly updates."""
+    require_root()
     ok, err = _systemctl("disable", "honeypot-update.timer")
     _systemctl("stop", "honeypot-update.timer")
     if ok:

@@ -4,7 +4,7 @@ Educational SSH honeypot with modular hardware monitoring for Raspberry Pi.
 
 Deploy in 15-20 minutes. Monitor attacks in real-time with OLED display, LED indicators, and push-button control.
 
-⚠️ **Status:** Install script tested and working on RPi4 64-bit Debian Trixie. Hardware modules (OLED, LED) implemented and awaiting hardware testing. See [Threat Model](docs/THREAT_MODEL.md) for design scope.
+⚠️ **Status:** Install script tested and working on RPi4 64-bit Debian Trixie. LED status indicators tested and working. OLED display implemented, awaiting hardware testing. See [Threat Model](docs/THREAT_MODEL.md) for design scope.
 
 ## What It Does
 

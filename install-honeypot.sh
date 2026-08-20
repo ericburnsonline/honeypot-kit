@@ -1,24 +1,28 @@
 #!/bin/bash
 ###############################################################################
 # Honeypot Kit - Install Script
-# Version: 10
+# Version: 11
 # Educational SSH honeypot (Cowrie) with health checks and OPSEC hardening
 #
 # Tested on: Raspberry Pi 4, 64-bit Raspberry Pi OS Debian Trixie (2026-06-18)
 #
 # Usage: sudo bash install-honeypot.sh
 #
-# v10 CHANGES:
-#   - Auto-update prompt at install time: optional weekly updates for
-#     Honeypot Kit modules (cli.py, monitor.py, integrations only)
-#   - honeypot-update.sh: downloads modules, compares checksums,
-#     replaces only if changed, restarts monitor if monitor.py changed,
-#     never touches Cowrie or system packages, logs all activity
-#   - systemd timer: honeypot-update.timer runs weekly (Sunday 03:00)
-#   - CLI gains: honeypot-kit update status/now/enable/disable
+# v11 CHANGES:
+#   - Dependencies: python3-click, python3-rpi.gpio, python3-pil installed
+#     via apt (not pip) to avoid PEP 668 externally-managed-environment
+#     error on Debian Trixie; Adafruit OLED library still via pip with
+#     --break-system-packages, skipped gracefully if unavailable
+#   - fix_permissions: log dir set to 0777, monitor.log pre-created with
+#     0666 so pi user (monitor daemon) can write without permission error
+#   - monitor.py: fixed bare GPIO.HIGH/LOW references in _set() method
+#     to use self._GPIO.HIGH/LOW (module stored as self._GPIO not global)
+#   - cli.py: fixed shebang typo (evn -> env)
+#   - cli.py: require_root() check added to all commands that write config
+#     or touch hardware; exits with clear "Run as: sudo honeypot-kit..."
 ###############################################################################
 
-VERSION="10"
+VERSION="11"
 GITHUB_RAW="https://raw.githubusercontent.com/ericburnsonline/honeypot-kit/main"
 
 # Colors
@@ -238,20 +242,17 @@ install_dependencies() {
         authbind \
         libffi-dev libssl-dev build-essential \
         net-tools curl wget \
+        python3-click \
+        python3-rpi.gpio \
+        python3-pil \
         > /dev/null 2>&1
 
-    # Install CLI dependencies into system Python
-    # click: CLI framework
-    # adafruit-circuitpython-ssd1306: OLED driver (SSD1306/SSD1315 compatible)
-    # adafruit-blinka: CircuitPython compatibility layer for Pi GPIO
-    # RPi.GPIO: GPIO pin control for LEDs
-    pip3 install --quiet --no-cache-dir \
-        click \
-        adafruit-circuitpython-ssd1306 \
-        adafruit-blinka \
-        RPi.GPIO \
-        pillow \
-        > /dev/null 2>&1 || true
+    # Adafruit OLED library - not always available via apt on Trixie/Python 3.13
+    # Install via pip with --break-system-packages; skip silently if unavailable
+    pip3 install --quiet --no-cache-dir --break-system-packages \
+        adafruit-circuitpython-ssd1306 adafruit-blinka \
+        > /dev/null 2>&1 || \
+        log_warn "Adafruit OLED library not available - install manually when connecting OLED display."
 }
 
 configure_hostname() {
@@ -371,7 +372,11 @@ fix_permissions() {
     chmod -R u+rwX "$COWRIE_HOME"
     mkdir -p "$COWRIE_HOME/var/log/cowrie" "$COWRIE_HOME/var/run"
     chmod -R u+rwX "$COWRIE_HOME/var"
-    chmod -R 0775 "$LOG_DIR"
+    # Log dir writable by cowrie and pi (monitor daemon runs as pi)
+    chmod -R 0777 "$LOG_DIR"
+    # Pre-create monitor log so permissions are set before daemon starts
+    touch "$LOG_DIR/monitor.log"
+    chmod 0666 "$LOG_DIR/monitor.log"
 }
 
 configure_firewall() {

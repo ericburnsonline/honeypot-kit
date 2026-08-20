@@ -10,16 +10,60 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Unreleased
 
 ### In Progress
-- Hardware module implementations (OLED, LED, Button)
-- Dashboard integration framework
-- Smoke test script bug fix (line 32 heredoc escaping issue)
+- Hardware module testing (OLED, LED) on physical hardware
+- Grafana integration Stage 2 (working installable integration)
+- data-pipeline.md (shared Prometheus/Loki/InfluxDB infrastructure doc)
 
 ### Planned (Phase 2-5)
 - Grafana dashboard for attack visualization
+- Alerting integration (Alertmanager + Slack/PagerDuty)
 - Kafka event streaming integration
 - Claude AI analysis of attack patterns
+- SIEM integration (Wazuh)
 - Kubernetes orchestration support
 - Multi-honeypot coordination
+
+---
+
+## [0.3.0] - 2026-08-20
+
+### Added
+- `modules/cli.py` - CLI tool source (`honeypot-kit` command), downloaded
+  by install script at install time
+- `modules/monitor.py` - hardware monitor daemon, drives OLED display and
+  LED indicators continuously from live Cowrie data
+- `docs/integrations/grafana.md` - Stage 1 Grafana integration overview:
+  recommended stack (Prometheus + Grafana), software requirements, costs,
+  planned dashboards, and security considerations
+- Hardware monitor daemon features:
+  - Reads Cowrie JSON log in real time (attack count, rate, active sessions,
+    last attacker IP)
+  - Pillow Image as universal render target - display drivers are pluggable
+  - Two OLED layouts: small (128x32/128x64) and square (128x128)
+  - LED flash patterns per state: solid, slow flash (1s), fast flash (0.25s)
+  - Startup sequence flashes all three LEDs to confirm hardware is alive
+  - Graceful shutdown on SIGTERM/SIGINT
+- LED state table: healthy, active session, high attack rate, warning,
+  Cowrie down, critical error - each with distinct flash pattern
+- Auto-update system: optional weekly updates for Honeypot Kit modules
+  (cli.py, monitor.py, integrations) - never touches Cowrie or system packages
+- `honeypot-update.sh` - SHA256 checksum comparison; replaces files only
+  when changed; restarts monitor if monitor.py updated; logs all activity
+- systemd timer pair: weekly Sunday at 03:00
+
+### Changed
+- Install script now downloads CLI and monitor from GitHub at install time
+  rather than embedding them as heredocs
+- CLI gains: `honeypot-kit monitor start/stop/restart/status`
+- CLI gains: `honeypot-kit update status/now/enable/disable`
+- Smoke test heredoc escaping bug fixed
+- Smoke test adds CLI check and auto-update timer check
+- Install prompt added for auto-update preference
+- OLED supported resolutions expanded: 128x64, 128x32, 96x16, 128x128
+
+### Known Issues
+- Hardware modules (OLED, LED) not yet tested on physical hardware -
+  use `honeypot-kit oled test` and `honeypot-kit led test` as first step
 
 ---
 
@@ -37,16 +81,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   network-online.target dependency
 - authbind configured automatically so Cowrie can bind to port 22
   as unprivileged user
-- Smoke test script (known issue: line 32 bug to be fixed in next commit)
+- Smoke test script
 - Health check script running every 5 minutes via cron
 - nmap installed for local port verification
 - Reboot prompt at end of install with warning if declined
 - Unattended install timing displayed at completion
 - Invocation check - detects if not run as `sudo bash` and exits cleanly
-
-### Known Issues
-- smoke-test.sh line 32 fails due to heredoc escaping bug - Cowrie
-  and all other functionality unaffected
 
 ---
 

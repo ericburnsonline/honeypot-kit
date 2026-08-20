@@ -290,9 +290,9 @@ class LEDController:
     def _set(self, red, yellow, green):
         if not self._gpio_ok:
             return
-        self._GPIO.output(self.pin_red,    GPIO.HIGH if red    else GPIO.LOW)
-        self._GPIO.output(self.pin_yellow, GPIO.HIGH if yellow else GPIO.LOW)
-        self._GPIO.output(self.pin_green,  GPIO.HIGH if green  else GPIO.LOW)
+        self._GPIO.output(self.pin_red,    self._GPIO.HIGH if red    else self._GPIO.LOW)
+        self._GPIO.output(self.pin_yellow, self._GPIO.HIGH if yellow else self._GPIO.LOW)
+        self._GPIO.output(self.pin_green,  self._GPIO.HIGH if green  else self._GPIO.LOW)
 
     def startup_sequence(self):
         """Flash each LED in sequence to show hardware is alive."""

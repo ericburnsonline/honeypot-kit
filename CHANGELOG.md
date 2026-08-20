@@ -62,8 +62,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - OLED supported resolutions expanded: 128x64, 128x32, 96x16, 128x128
 
 ### Known Issues
-- Hardware modules (OLED, LED) not yet tested on physical hardware -
-  use `honeypot-kit oled test` and `honeypot-kit led test` as first step
+- LED status indicators tested and working on physical hardware
+- OLED display implemented, not yet tested on physical hardware -
+  use `honeypot-kit oled test` as first step when display is connected
 
 ---
 

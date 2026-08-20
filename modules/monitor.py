@@ -44,7 +44,7 @@ from pathlib import Path
 # ---------------------------------------------------------------------------
 
 CONF_FILE    = "/opt/honeypot/honeypot-kit.conf"
-COWRIE_LOG   = "/opt/honeypot/cowrie/var/log/cowrie/cowrie.log"
+COWRIE_LOG   = "/opt/honeypot/cowrie/var/log/cowrie/cowrie.json"
 LOG_FILE     = "/opt/honeypot/logs/monitor.log"
 UPDATE_SECS  = 5      # how often to refresh display and LEDs
 ATTACK_WINDOW = 60    # seconds to look back when calculating attack rate
@@ -94,6 +94,7 @@ class HoneypotState:
         self.active_sessions = 0
         self.last_attacker   = "none"
         self.recent_events   = deque()   # (timestamp, event_id) tuples
+        self._active_sessions = set()    # persistent across calls
         self.cowrie_running  = False
         self.disk_pct        = 0
         self.mem_pct         = 0
@@ -175,6 +176,7 @@ class HoneypotState:
         """Tail the Cowrie JSON log for new events."""
         log_path = Path(COWRIE_LOG)
         if not log_path.exists():
+            log.warning(f"Cowrie JSON log not found: {COWRIE_LOG}")
             return
 
         try:
@@ -183,7 +185,6 @@ class HoneypotState:
                 lines = f.readlines()
                 self._log_pos = f.tell()
 
-            sessions = set()
             for line in lines:
                 line = line.strip()
                 if not line:
@@ -193,25 +194,24 @@ class HoneypotState:
                 except json.JSONDecodeError:
                     continue
 
-                event_id  = event.get("eventid", "")
-                timestamp = event.get("timestamp", "")
-                src_ip    = event.get("src_ip", "")
+                event_id = event.get("eventid", "")
+                src_ip   = event.get("src_ip", "")
+                session  = event.get("session", "")
 
-                # Count login attempts
+                # Count login attempts (event IDs without cowrie. prefix)
                 if "login" in event_id:
                     self.attack_count += 1
                     self.recent_events.append((time.time(), event_id))
                     if src_ip:
                         self.last_attacker = src_ip
 
-                # Track active sessions
-                if event_id == "cowrie.session.connect":
-                    sessions.add(event.get("session", ""))
-                if event_id == "cowrie.session.closed":
-                    sessions.discard(event.get("session", ""))
+                # Track active sessions persistently
+                if event_id == "session.connect" and session:
+                    self._active_sessions.add(session)
+                if event_id in ("session.closed", "session.close") and session:
+                    self._active_sessions.discard(session)
 
-            if sessions:
-                self.active_sessions = len(sessions)
+            self.active_sessions = len(self._active_sessions)
 
         except Exception as e:
             log.warning(f"Log read error: {e}")

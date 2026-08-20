@@ -198,7 +198,7 @@ class HoneypotState:
                 src_ip   = event.get("src_ip", "")
                 session  = event.get("session", "")
 
-                # Count login attempts (event IDs without cowrie. prefix)
+                # Count login attempts
                 if "login" in event_id:
                     self.attack_count += 1
                     self.recent_events.append((time.time(), event_id))
@@ -206,9 +206,10 @@ class HoneypotState:
                         self.last_attacker = src_ip
 
                 # Track active sessions persistently
-                if event_id == "session.connect" and session:
+                # Also add on login.success in case session.connect was missed
+                if event_id in ("cowrie.session.connect", "cowrie.login.success") and session:
                     self._active_sessions.add(session)
-                if event_id in ("session.closed", "session.close") and session:
+                if event_id in ("cowrie.session.closed", "cowrie.session.close") and session:
                     self._active_sessions.discard(session)
 
             self.active_sessions = len(self._active_sessions)

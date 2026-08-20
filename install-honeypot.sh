@@ -1,25 +1,25 @@
 #!/bin/bash
 ###############################################################################
 # Honeypot Kit - Install Script
-# Version: 7
+# Version: 10
 # Educational SSH honeypot (Cowrie) with health checks and OPSEC hardening
 #
-# Tested on: Raspberry Pi 4, 64-bit Raspberry Pi OS Dixie
+# Tested on: Raspberry Pi 4, 64-bit Raspberry Pi OS Debian Trixie (2026-06-18)
 #
 # Usage: sudo bash install-honeypot.sh
 #
-# v7 CHANGES:
-#   - authbind installed and configured so Cowrie can bind to port 22
-#     as unprivileged user (errno 13 fix)
-#   - ExecStart prefixed with /usr/bin/authbind --deep
-#   - Hostname suggested randomly from realistic pool; user can override
-#   - Real SSH port suggested as 2222; user can pick any valid port
-#   - Port validation: not reserved (<1024), not in use, not well-known alt
-#   - All changes from v6 retained
+# v10 CHANGES:
+#   - Auto-update prompt at install time: optional weekly updates for
+#     Honeypot Kit modules (cli.py, monitor.py, integrations only)
+#   - honeypot-update.sh: downloads modules, compares checksums,
+#     replaces only if changed, restarts monitor if monitor.py changed,
+#     never touches Cowrie or system packages, logs all activity
+#   - systemd timer: honeypot-update.timer runs weekly (Sunday 03:00)
+#   - CLI gains: honeypot-kit update status/now/enable/disable
 ###############################################################################
 
-# Version
-VERSION="7"
+VERSION="10"
+GITHUB_RAW="https://raw.githubusercontent.com/ericburnsonline/honeypot-kit/main"
 
 # Colors
 RED='\033[0;31m'
@@ -32,6 +32,8 @@ HONEYPOT_HOME="/opt/honeypot"
 COWRIE_HOME="$HONEYPOT_HOME/cowrie"
 LOG_DIR="$HONEYPOT_HOME/logs"
 COWRIE_USER="cowrie"
+CLI_SCRIPT="/usr/local/bin/honeypot-kit"
+CONF_FILE="$HONEYPOT_HOME/honeypot-kit.conf"
 
 # Timing
 SCRIPT_START_TIME=$(date '+%Y-%m-%d %H:%M:%S')
@@ -76,7 +78,6 @@ check_invocation() {
 ###############################################################################
 
 suggest_hostname() {
-    # Realistic server name pools with believable number ranges
     local WEB=(web01 web02 web03 web04 web05 web06 web07 web08 web09 web10 web11 web12)
     local MAIL=(mail01 mail02 mail03 mail04 mail05)
     local DB=(db01 db02 db03 db04 db05)
@@ -147,7 +148,6 @@ gather_configuration() {
         if [ "$SSH_PORT" -gt 65535 ]; then
             log_error "Port must be 65535 or below."; continue
         fi
-        # Warn against well-known alternate ports
         if [[ "$SSH_PORT" =~ ^(8080|8443|3389|3306|5432|6379|27017)$ ]]; then
             log_warn "Port $SSH_PORT is a well-known service port. Consider a less common one."
             read -p "Use it anyway? [y/N]: " USE_ANYWAY
@@ -166,6 +166,18 @@ gather_configuration() {
     read -p "Allow dashboard from subnet [192.168.1.0/24]: " DASHBOARD_SUBNET
     DASHBOARD_SUBNET=${DASHBOARD_SUBNET:-192.168.1.0/24}
 
+    # --- Auto-update ---
+    echo ""
+    echo "Honeypot Kit can automatically check for and apply weekly updates"
+    echo "to its own modules (CLI, monitor daemon, integrations)."
+    echo "Cowrie and system packages are never touched by this."
+    read -p "Enable automatic weekly module updates? [y/N]: " AUTO_UPDATE
+    if [[ "$AUTO_UPDATE" =~ ^[Yy]$ ]]; then
+        AUTO_UPDATE_ENABLED=true
+    else
+        AUTO_UPDATE_ENABLED=false
+    fi
+
     # --- Confirm ---
     echo ""
     echo "------------------------------------------------------------"
@@ -176,6 +188,7 @@ gather_configuration() {
     echo "  Dashboard subnet  : $DASHBOARD_SUBNET"
     echo "  Cowrie honeypot   : port 22"
     echo "  Real SSH          : port $SSH_PORT"
+    echo "  Auto-update       : $AUTO_UPDATE_ENABLED"
     echo "------------------------------------------------------------"
     echo ""
     read -p "Proceed with installation? [y/N]: " CONFIRM
@@ -226,6 +239,19 @@ install_dependencies() {
         libffi-dev libssl-dev build-essential \
         net-tools curl wget \
         > /dev/null 2>&1
+
+    # Install CLI dependencies into system Python
+    # click: CLI framework
+    # adafruit-circuitpython-ssd1306: OLED driver (SSD1306/SSD1315 compatible)
+    # adafruit-blinka: CircuitPython compatibility layer for Pi GPIO
+    # RPi.GPIO: GPIO pin control for LEDs
+    pip3 install --quiet --no-cache-dir \
+        click \
+        adafruit-circuitpython-ssd1306 \
+        adafruit-blinka \
+        RPi.GPIO \
+        pillow \
+        > /dev/null 2>&1 || true
 }
 
 configure_hostname() {
@@ -284,10 +310,8 @@ install_cowrie() {
         git clone https://github.com/cowrie/cowrie.git "$COWRIE_HOME" > /dev/null 2>&1
     fi
 
-    # Ownership before pip so egg-info and _version.py can be written
     chown -R "$COWRIE_USER":"$COWRIE_USER" "$COWRIE_HOME"
 
-    # --no-cache-dir: cowrie user has no home dir so pip cache is not writable
     sudo -u "$COWRIE_USER" bash -c "
         cd '$COWRIE_HOME' || exit 1
         python3 -m venv venv
@@ -296,7 +320,6 @@ install_cowrie() {
         pip install --quiet --no-cache-dir -e .
     "
 
-    # cowrie init creates etc/cowrie.cfg and var/ skeleton
     sudo -u "$COWRIE_USER" bash -c "
         cd '$COWRIE_HOME' || exit 1
         source venv/bin/activate
@@ -356,8 +379,8 @@ configure_firewall() {
     ufw --force enable > /dev/null 2>&1
     ufw default deny incoming > /dev/null 2>&1
     ufw default allow outgoing > /dev/null 2>&1
-    ufw allow 22/tcp   > /dev/null 2>&1       # Cowrie honeypot
-    ufw allow "$SSH_PORT"/tcp > /dev/null 2>&1 # real SSH
+    ufw allow 22/tcp   > /dev/null 2>&1
+    ufw allow "$SSH_PORT"/tcp > /dev/null 2>&1
     ufw deny to any port 8000 > /dev/null 2>&1
     ufw allow from "$DASHBOARD_SUBNET" to any port 8000 > /dev/null 2>&1
     log_info "Firewall configured."
@@ -422,7 +445,7 @@ HEALTHEOF
     chmod +x "$HONEYPOT_HOME/scripts/health-check.sh"
 
     if [ ! -f "$HONEYPOT_HOME/scripts/health-check.sh" ]; then
-        log_warn "health-check.sh failed to write. Check permissions on $HONEYPOT_HOME/scripts/"
+        log_warn "health-check.sh failed to write."
     fi
 
     cat > /etc/cron.d/honeypot-health << 'CRONEOF'
@@ -432,12 +455,17 @@ CRONEOF
 
 install_smoke_test() {
     log_info "Installing smoke test..."
-    # SSH_PORT is written into the smoke test at install time
-    # Write SSH_PORT into the file first, then append the rest with a
-    # quoted heredoc so the outer script's variables are not expanded.
-    echo "#!/bin/bash" > "$HONEYPOT_HOME/scripts/smoke-test.sh"
-    echo "SSH_PORT=${SSH_PORT}" >> "$HONEYPOT_HOME/scripts/smoke-test.sh"
+
+    # Write shebang and SSH_PORT first, then append the rest
+    # with a QUOTED heredoc so no backslash escaping is needed
+    # and the outer script's variables are not expanded inside it.
+    {
+        echo "#!/bin/bash"
+        echo "SSH_PORT=${SSH_PORT}"
+    } > "$HONEYPOT_HOME/scripts/smoke-test.sh"
+
     cat >> "$HONEYPOT_HOME/scripts/smoke-test.sh" << 'SMOKEEOF'
+
 echo "=== Honeypot Kit Smoke Test ==="
 PASS=0; FAIL=0; WARN=0
 
@@ -458,7 +486,7 @@ else
 fi
 
 # 3. Real SSH check on configured port
-if ss -tlnp | grep -q ':${SSH_PORT}\b'; then
+if ss -tlnp | grep -q ":${SSH_PORT}\b"; then
     echo "  [PASS] Real SSH listening on port ${SSH_PORT}"; ((PASS++))
 else
     echo "  [WARN] Real SSH not found on port ${SSH_PORT}"; ((WARN++))
@@ -466,23 +494,23 @@ fi
 
 # 4. Log file exists and was written recently
 LOG="/opt/honeypot/cowrie/var/log/cowrie/cowrie.log"
-if [ -f "\$LOG" ]; then
-    AGE=\$(( \$(date +%s) - \$(stat -c %Y "\$LOG") ))
-    if [ "\$AGE" -lt 600 ]; then
-        echo "  [PASS] Log file active (last write \${AGE}s ago)"; ((PASS++))
+if [ -f "$LOG" ]; then
+    AGE=$(( $(date +%s) - $(stat -c %Y "$LOG") ))
+    if [ "$AGE" -lt 600 ]; then
+        echo "  [PASS] Log file active (last write ${AGE}s ago)"; ((PASS++))
     else
-        echo "  [WARN] Log file exists but last write was \${AGE}s ago"; ((WARN++))
+        echo "  [WARN] Log file exists but last write was ${AGE}s ago"; ((WARN++))
     fi
 else
     echo "  [FAIL] No log file found"; ((FAIL++))
 fi
 
 # 5. Disk
-DISK=\$(df / | awk 'NR==2 {print \$5}' | sed 's/%//')
-if [ "\$DISK" -lt 85 ]; then
-    echo "  [PASS] Disk OK (\${DISK}%)"; ((PASS++))
+DISK=$(df / | awk 'NR==2 {print $5}' | sed 's/%//')
+if [ "$DISK" -lt 85 ]; then
+    echo "  [PASS] Disk OK (${DISK}%)"; ((PASS++))
 else
-    echo "  [FAIL] Disk high (\${DISK}%)"; ((FAIL++))
+    echo "  [FAIL] Disk high (${DISK}%)"; ((FAIL++))
 fi
 
 # 6. Time sync
@@ -492,28 +520,239 @@ else
     echo "  [WARN] Time not yet synchronized"; ((WARN++))
 fi
 
+# 7. CLI tool present
+if command -v honeypot-kit > /dev/null 2>&1; then
+    echo "  [PASS] honeypot-kit CLI installed"; ((PASS++))
+else
+    echo "  [WARN] honeypot-kit CLI not found"; ((WARN++))
+fi
+
+# 8. Auto-update timer (warn only if not present - may have been declined)
+if systemctl is-enabled --quiet honeypot-update.timer 2>/dev/null; then
+    echo "  [PASS] Auto-update timer enabled"; ((PASS++))
+else
+    echo "  [INFO] Auto-update timer not enabled (declined at install or disabled)"
+fi
+
 echo ""
-echo "Results: \$PASS passed, \$WARN warnings, \$FAIL failed"
-[ "\$FAIL" -eq 0 ] && exit 0 || exit 1
+echo "Results: $PASS passed, $WARN warnings, $FAIL failed"
+[ "$FAIL" -eq 0 ] && exit 0 || exit 1
 SMOKEEOF
 
     chmod +x "$HONEYPOT_HOME/scripts/smoke-test.sh"
 
     if [ ! -f "$HONEYPOT_HOME/scripts/smoke-test.sh" ]; then
-        log_warn "smoke-test.sh failed to write. Check permissions on $HONEYPOT_HOME/scripts/"
+        log_warn "smoke-test.sh failed to write."
     else
         log_info "Smoke test installed at $HONEYPOT_HOME/scripts/smoke-test.sh"
     fi
 }
 
+###############################################################################
+# DEFAULT CONFIG FILE
+###############################################################################
+
+install_config() {
+    log_info "Writing default configuration file..."
+    cat > "$CONF_FILE" << 'CONFEOF'
+[oled]
+enabled = false
+i2c_address = 0x3C
+resolution = 128x64
+
+[led]
+enabled = false
+pin_red = 17
+pin_yellow = 27
+pin_green = 22
+CONFEOF
+    log_info "Config written to $CONF_FILE"
+}
+
+###############################################################################
+# CLI TOOL
+###############################################################################
+
+install_cli() {
+    log_info "Downloading honeypot-kit CLI from GitHub..."
+    if wget -q "$GITHUB_RAW/modules/cli.py" -O "$CLI_SCRIPT"; then
+        chmod +x "$CLI_SCRIPT"
+        log_info "CLI installed at $CLI_SCRIPT"
+        log_info "Usage: honeypot-kit status"
+    else
+        log_warn "CLI download failed. Check network and try: wget $GITHUB_RAW/modules/cli.py"
+    fi
+}
+
+install_monitor() {
+    log_info "Downloading hardware monitor daemon from GitHub..."
+    mkdir -p "$HONEYPOT_HOME/modules"
+    if wget -q "$GITHUB_RAW/modules/monitor.py" -O "$HONEYPOT_HOME/modules/monitor.py"; then
+        chmod +x "$HONEYPOT_HOME/modules/monitor.py"
+        log_info "Monitor daemon installed at $HONEYPOT_HOME/modules/monitor.py"
+    else
+        log_warn "Monitor download failed. Check network and try: wget $GITHUB_RAW/modules/monitor.py"
+    fi
+}
+
+create_monitor_service() {
+    log_info "Creating honeypot-monitor systemd service..."
+    cat > /etc/systemd/system/honeypot-monitor.service << MONEOF
+[Unit]
+Description=Honeypot Kit Hardware Monitor (OLED + LED)
+After=network.target cowrie.service
+Wants=cowrie.service
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=$HONEYPOT_HOME
+ExecStart=/usr/bin/python3 $HONEYPOT_HOME/modules/monitor.py
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
+MONEOF
+
+    systemctl daemon-reload > /dev/null 2>&1
+    # Monitor service is NOT enabled by default - only starts when
+    # user enables OLED or LED via CLI
+    log_info "Monitor service created (disabled by default)."
+    log_info "Enable with: honeypot-kit oled enable && honeypot-kit monitor start"
+}
+
+install_auto_update() {
+    if [ "$AUTO_UPDATE_ENABLED" != "true" ]; then
+        log_info "Auto-update disabled - skipping."
+        return
+    fi
+
+    log_info "Installing auto-update service..."
+
+    # Update script
+    cat > /opt/honeypot/scripts/honeypot-update.sh << 'UPDATEEOF'
+#!/bin/bash
+###############################################################################
+# Honeypot Kit - Module Auto-updater
+# Updates CLI, monitor daemon, and integration modules from GitHub.
+# Never touches Cowrie or system packages.
+###############################################################################
+
+GITHUB_RAW="https://raw.githubusercontent.com/ericburnsonline/honeypot-kit/main"
+HONEYPOT_HOME="/opt/honeypot"
+LOG_FILE="$HONEYPOT_HOME/logs/updates.log"
+MODULES_DIR="$HONEYPOT_HOME/modules"
+CLI_SCRIPT="/usr/local/bin/honeypot-kit"
+UPDATE_CONF="$HONEYPOT_HOME/honeypot-kit.conf"
+TIMESTAMP=$(date '+%Y-%m-%d %H:%M:%S')
+
+log_update() { echo "[$TIMESTAMP] $1" >> "$LOG_FILE"; }
+
+# Files to check and update
+declare -A UPDATE_FILES=(
+    ["$GITHUB_RAW/modules/monitor.py"]="$MODULES_DIR/monitor.py"
+    ["$GITHUB_RAW/modules/cli.py"]="$CLI_SCRIPT"
+)
+
+CHANGED=0
+FAILED=0
+
+log_update "--- Auto-update check started ---"
+
+for URL in "${!UPDATE_FILES[@]}"; do
+    DEST="${UPDATE_FILES[$URL]}"
+    TMPFILE=$(mktemp)
+    FILENAME=$(basename "$DEST")
+
+    if wget -q "$URL" -O "$TMPFILE" 2>/dev/null; then
+        # Compare checksums
+        NEW_SUM=$(sha256sum "$TMPFILE" | awk '{print $1}')
+        if [ -f "$DEST" ]; then
+            OLD_SUM=$(sha256sum "$DEST" | awk '{print $1}')
+        else
+            OLD_SUM=""
+        fi
+
+        if [ "$NEW_SUM" != "$OLD_SUM" ]; then
+            cp "$TMPFILE" "$DEST"
+            chmod +x "$DEST"
+            log_update "UPDATED: $FILENAME (checksum changed)"
+            CHANGED=$((CHANGED + 1))
+
+            # Restart monitor service if monitor.py changed
+            if [[ "$FILENAME" == "monitor.py" ]]; then
+                if systemctl is-active --quiet honeypot-monitor; then
+                    systemctl restart honeypot-monitor > /dev/null 2>&1
+                    log_update "RESTARTED: honeypot-monitor service"
+                fi
+            fi
+        else
+            log_update "OK: $FILENAME (no change)"
+        fi
+    else
+        log_update "FAILED: $FILENAME (download error - keeping existing)"
+        FAILED=$((FAILED + 1))
+    fi
+
+    rm -f "$TMPFILE"
+done
+
+log_update "--- Update check complete: $CHANGED updated, $FAILED failed ---"
+UPDATEEOF
+
+    chmod +x /opt/honeypot/scripts/honeypot-update.sh
+
+    # systemd service unit (runs the script)
+    cat > /etc/systemd/system/honeypot-update.service << 'SVCEOF'
+[Unit]
+Description=Honeypot Kit Module Updater
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/honeypot/scripts/honeypot-update.sh
+StandardOutput=journal
+StandardError=journal
+SVCEOF
+
+    # systemd timer (weekly, Sunday at 03:00)
+    cat > /etc/systemd/system/honeypot-update.timer << 'TIMEREOF'
+[Unit]
+Description=Honeypot Kit Weekly Module Update
+Requires=honeypot-update.service
+
+[Timer]
+OnCalendar=Sun 03:00:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+TIMEREOF
+
+    systemctl daemon-reload > /dev/null 2>&1
+    systemctl enable honeypot-update.timer > /dev/null 2>&1
+    systemctl start  honeypot-update.timer > /dev/null 2>&1
+
+    # Record auto-update preference in config
+    if ! grep -q "^\[updates\]" "$CONF_FILE" 2>/dev/null; then
+        cat >> "$CONF_FILE" << 'CONFEOF'
+
+[updates]
+enabled = true
+CONFEOF
+    fi
+
+    log_info "Auto-update enabled. Runs weekly Sunday at 03:00."
+    log_info "Logs: /opt/honeypot/logs/updates.log"
+    log_info "Manual run: honeypot-kit update now"
+}
+
 create_systemd_service() {
     log_info "Creating systemd service..."
-
-    # Type=forking: Cowrie uses Twisted which daemonizes
-    # authbind --deep: allows cowrie user to bind to port 22
-    # No -n flag: current Cowrie rejects it as unrecognized
-    # PIDFile: lets systemd track the forked process
-    # ExecStartPre: ensures var/run exists and is owned correctly
     cat > /etc/systemd/system/cowrie.service << SERVICEEOF
 [Unit]
 Description=Cowrie SSH Honeypot
@@ -579,7 +818,20 @@ show_summary() {
     echo "  Install location      : $HONEYPOT_HOME"
     echo "  Logs                  : $COWRIE_HOME/var/log/cowrie/cowrie.log"
     echo ""
-    echo "Verify after reboot"
+    echo "Hardware Modules (disabled by default)"
+    echo "  honeypot-kit status                show current config"
+    echo "  honeypot-kit oled enable           enable OLED display"
+    echo "  honeypot-kit oled set-address 0x3C set I2C address"
+    echo "  honeypot-kit oled test             test OLED hardware"
+    echo "  honeypot-kit led enable            enable LED indicators"
+    echo "  honeypot-kit led set-pins          assign GPIO pins"
+    echo "  honeypot-kit led test              test LED hardware"
+    echo "  honeypot-kit monitor start         start hardware daemon"
+    echo "  honeypot-kit monitor status        check daemon status"
+    echo "  honeypot-kit update status         show update log"
+    echo "  honeypot-kit update now            run update check now"
+    echo ""
+    echo "Verify"
     echo "  sudo bash $HONEYPOT_HOME/scripts/smoke-test.sh"
     echo ""
     echo "Dashboard (when modules are installed) is SSH-tunnel only:"
@@ -633,7 +885,12 @@ main() {
     configure_logrotate
     install_health_check
     install_smoke_test
+    install_config
+    install_cli
+    install_monitor
+    install_auto_update
     create_systemd_service
+    create_monitor_service
     harden_system
 
     log_info "Starting Cowrie..."

@@ -22,6 +22,7 @@ Usage:
 import sys
 import configparser
 import os
+import json
 import subprocess
 
 try:
@@ -153,6 +154,11 @@ def oled():
 def enable():
     """Enable the OLED display."""
     require_root()
+    if not os.path.exists("/dev/i2c-1"):
+        click.echo("WARNING: I2C not detected (/dev/i2c-1 missing).")
+        click.echo("  Reboot if I2C was just enabled by the install script.")
+        click.echo("  Or enable manually: sudo raspi-config -> Interface Options -> I2C")
+        click.echo("")
     config = load_config()
     config["oled"]["enabled"] = "true"
     save_config(config)
@@ -176,11 +182,19 @@ def disable():
 def oled_set_address(address):
     """Set the I2C address (0x3C or 0x3D)."""
     require_root()
-    if address not in VALID_I2C_ADDRESSES:
-        click.echo(f"ERROR: Invalid I2C address '{address}'.")
+    # Normalize: accept 0x3c or 0x3C, store as 0x3C
+    try:
+        normalized = "0x" + format(int(address, 16), "02X")
+    except ValueError:
+        click.echo(f"ERROR: '{address}' is not a valid hex address.")
+        click.echo("  Examples: 0x3C or 0x3D")
+        sys.exit(1)
+    if normalized not in VALID_I2C_ADDRESSES:
+        click.echo(f"ERROR: Invalid I2C address '{normalized}'.")
         click.echo(f"  Valid options : {', '.join(VALID_I2C_ADDRESSES)}")
         click.echo("  Tip: run 'i2cdetect -y 1' to find your display's address.")
         sys.exit(1)
+    address = normalized
     config = load_config()
     config["oled"]["i2c_address"] = address
     save_config(config)
@@ -202,9 +216,16 @@ def oled_set_resolution(resolution):
 
 
 @oled.command()
-def test():
+@click.option("--keep", is_flag=True, default=False,
+              help="Leave test image on screen instead of clearing after 3 seconds.")
+def test(keep):
     """Test the OLED display with a status screen."""
     require_root()
+    if not os.path.exists("/dev/i2c-1"):
+        click.echo("ERROR: I2C not detected (/dev/i2c-1 missing).")
+        click.echo("  Reboot if I2C was just enabled by the install script.")
+        click.echo("  Or enable manually: sudo raspi-config -> Interface Options -> I2C")
+        sys.exit(1)
     config = load_config()
     addr_str = config["oled"].get("i2c_address", "0x3C")
     res      = config["oled"].get("resolution",  "128x64")
@@ -235,6 +256,15 @@ def test():
         display.image(image)
         display.show()
         click.echo(f"OLED test OK - check your display ({res} @ {addr_str}).")
+
+        if not keep:
+            import time as _time
+            _time.sleep(3)
+            display.fill(0)
+            display.show()
+            click.echo("Display cleared.")
+        else:
+            click.echo("Test image kept on screen (--keep). Restart monitor to resume live display.")
 
     except ImportError as e:
         click.echo(f"ERROR: Missing library - {e}")
@@ -305,8 +335,22 @@ def led_set_pins(red, yellow, green):
     click.echo(f"LED pins set - Red: GPIO {red}, Yellow: GPIO {yellow}, Green: GPIO {green}.")
 
 
-@led.command()
-def test():
+@led.command("clear-alert")
+def led_clear_alert():
+    """Clear the persistent login alert (stops red blink)."""
+    require_root()
+    state_file = "/opt/honeypot/monitor-state.json"
+    try:
+        with open(state_file, "w") as f:
+            json.dump({"login_history": False}, f)
+        click.echo("Login alert cleared.")
+        click.echo("Restart the monitor to apply: honeypot-kit monitor restart")
+    except Exception as e:
+        click.echo(f"ERROR: Could not clear alert - {e}")
+        sys.exit(1)
+
+
+
     """Test LEDs by flashing each one in sequence."""
     require_root()
     config = load_config()

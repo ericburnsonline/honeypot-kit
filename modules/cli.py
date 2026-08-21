@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
 Honeypot Kit CLI
+Version: 2
 Manage hardware modules (OLED display, status LEDs) for Honeypot Kit.
 
 Usage:
@@ -86,7 +87,11 @@ def _systemctl(action, service=SERVICE):
         return False, str(e)
 
 
+VERSION = "2"
+
+
 @click.group()
+@click.version_option(version=VERSION, prog_name="honeypot-kit")
 def cli():
     """Honeypot Kit - hardware module manager."""
     pass
@@ -151,7 +156,7 @@ def oled():
 
 
 @oled.command()
-def enable():
+def oled_enable():
     """Enable the OLED display."""
     require_root()
     if not os.path.exists("/dev/i2c-1"):
@@ -167,7 +172,7 @@ def enable():
 
 
 @oled.command()
-def disable():
+def oled_disable():
     """Disable the OLED display."""
     require_root()
     config = load_config()
@@ -218,7 +223,7 @@ def oled_set_resolution(resolution):
 @oled.command()
 @click.option("--keep", is_flag=True, default=False,
               help="Leave test image on screen instead of clearing after 3 seconds.")
-def test(keep):
+def oled_test(keep):
     """Test the OLED display with a status screen."""
     require_root()
     if not os.path.exists("/dev/i2c-1"):
@@ -288,7 +293,7 @@ def led():
 
 
 @led.command()
-def enable():
+def led_enable():
     """Enable the LED status indicators."""
     require_root()
     config = load_config()
@@ -299,7 +304,7 @@ def enable():
 
 
 @led.command()
-def disable():
+def led_disable():
     """Disable the LED status indicators."""
     require_root()
     config = load_config()
@@ -350,7 +355,8 @@ def led_clear_alert():
         sys.exit(1)
 
 
-
+@led.command()
+def led_test():
     """Test LEDs by flashing each one in sequence."""
     require_root()
     config = load_config()
@@ -406,7 +412,7 @@ def monitor():
 
 
 @monitor.command()
-def start():
+def monitor_start():
     """Start the hardware monitor service."""
     require_root()
     ok, err = _systemctl("start")
@@ -421,7 +427,7 @@ def start():
 
 
 @monitor.command()
-def stop():
+def monitor_stop():
     """Stop the hardware monitor service."""
     require_root()
     ok, err = _systemctl("stop")
@@ -433,7 +439,7 @@ def stop():
 
 
 @monitor.command()
-def restart():
+def monitor_restart():
     """Restart the hardware monitor service."""
     require_root()
     ok, err = _systemctl("restart")
@@ -527,7 +533,7 @@ def now():
 
 
 @update.command()
-def enable():
+def update_enable():
     """Enable automatic weekly updates."""
     require_root()
     ok, err = _systemctl("enable", "honeypot-update.timer")
@@ -550,7 +556,7 @@ def enable():
 
 
 @update.command()
-def disable():
+def update_disable():
     """Disable automatic weekly updates."""
     require_root()
     ok, err = _systemctl("disable", "honeypot-update.timer")

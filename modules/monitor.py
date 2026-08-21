@@ -46,6 +46,7 @@ from pathlib import Path
 CONF_FILE    = "/opt/honeypot/honeypot-kit.conf"
 COWRIE_LOG   = "/opt/honeypot/cowrie/var/log/cowrie/cowrie.json"
 LOG_FILE     = "/opt/honeypot/logs/monitor.log"
+STATE_FILE   = "/opt/honeypot/monitor-state.json"  # persists login_history across restarts
 UPDATE_SECS  = 5      # how often to refresh display and LEDs
 ATTACK_WINDOW = 60    # seconds to look back when calculating attack rate
 HIGH_RATE_THRESHOLD = 10  # attacks per minute to trigger fast flash
@@ -95,6 +96,7 @@ class HoneypotState:
         self.last_attacker   = "none"
         self.recent_events   = deque()   # (timestamp, event_id) tuples
         self._active_sessions = set()    # persistent across calls
+        self.login_history   = self._load_login_history()
         self.cowrie_running  = False
         self.disk_pct        = 0
         self.mem_pct         = 0
@@ -102,6 +104,25 @@ class HoneypotState:
         self.ip_address      = "unknown"
         self._log_pos        = 0
         self._last_read      = 0
+
+    def _load_login_history(self):
+        """Load login_history from state file so it persists across restarts."""
+        try:
+            if os.path.exists(STATE_FILE):
+                with open(STATE_FILE) as f:
+                    data = json.load(f)
+                return data.get("login_history", False)
+        except Exception:
+            pass
+        return False
+
+    def _save_login_history(self):
+        """Persist login_history to state file."""
+        try:
+            with open(STATE_FILE, "w") as f:
+                json.dump({"login_history": self.login_history}, f)
+        except Exception as e:
+            log.warning(f"Could not save state: {e}")
 
     def refresh(self):
         self._check_cowrie()
@@ -204,6 +225,10 @@ class HoneypotState:
                     self.recent_events.append((time.time(), event_id))
                     if src_ip:
                         self.last_attacker = src_ip
+                    if event_id == "cowrie.login.success":
+                        if not self.login_history:
+                            self.login_history = True
+                            self._save_login_history()
 
                 # Track active sessions persistently
                 # Also add on login.success in case session.connect was missed
@@ -246,6 +271,8 @@ class HoneypotState:
             return "high_rate"
         if self.active_sessions > 0:
             return "active_session"
+        if self.login_history:
+            return "login_history"
         return "healthy"
 
 
@@ -324,13 +351,14 @@ class LEDController:
         self._stop_thread()
 
         patterns = {
-            # state           red             yellow          green
-            "healthy":       (False,          False,          "solid"),
-            "active_session":(False,          "slow",         "solid"),
-            "high_rate":     (False,          "fast",         "solid"),
-            "warning":       (False,          "solid",        False),
-            "cowrie_down":   ("slow",         "fast",         False),
-            "critical":      ("fast",         False,          False),
+            # state             red             yellow          green
+            "healthy":         (False,          False,          "solid"),
+            "login_history":   ("alert_blink",  False,          "solid"),
+            "active_session":  (False,          "slow",         "solid"),
+            "high_rate":       (False,          "fast",         "solid"),
+            "warning":         (False,          "solid",        False),
+            "cowrie_down":     ("slow",         "fast",         False),
+            "critical":        ("fast",         False,          False),
         }
 
         pattern = patterns.get(state, ("fast", False, False))
@@ -345,11 +373,11 @@ class LEDController:
 
         # Determine if any flashing is needed
         flash_pins = []
-        if red_p in ("slow", "fast"):
+        if red_p in ("slow", "fast", "alert_blink"):
             flash_pins.append((self.pin_red,    red_p))
-        if yel_p in ("slow", "fast"):
+        if yel_p in ("slow", "fast", "alert_blink"):
             flash_pins.append((self.pin_yellow, yel_p))
-        if grn_p in ("slow", "fast"):
+        if grn_p in ("slow", "fast", "alert_blink"):
             flash_pins.append((self.pin_green,  grn_p))
 
         if flash_pins and self._gpio_ok:
@@ -365,12 +393,25 @@ class LEDController:
         states = {pin: False for pin, _ in flash_pins}
         while not self._stop.is_set() and not _shutdown.is_set():
             for pin, speed in flash_pins:
-                states[pin] = not states[pin]
-                self._GPIO.output(pin, self._GPIO.HIGH if states[pin] else self._GPIO.LOW)
-            interval = self.FLASH_FAST if any(
-                s == "fast" for _, s in flash_pins
-            ) else self.FLASH_SLOW
-            self._stop.wait(interval / 2)
+                if speed == "alert_blink":
+                    # Short blink: on 0.2s, off 2.8s
+                    self._GPIO.output(pin, self._GPIO.HIGH)
+                    self._stop.wait(0.2)
+                    if self._stop.is_set() or _shutdown.is_set():
+                        break
+                    self._GPIO.output(pin, self._GPIO.LOW)
+                    self._stop.wait(2.8)
+                else:
+                    states[pin] = not states[pin]
+                    self._GPIO.output(
+                        pin,
+                        self._GPIO.HIGH if states[pin] else self._GPIO.LOW
+                    )
+            if not any(s == "alert_blink" for _, s in flash_pins):
+                interval = self.FLASH_FAST if any(
+                    s == "fast" for _, s in flash_pins
+                ) else self.FLASH_SLOW
+                self._stop.wait(interval / 2)
 
     def cleanup(self):
         self._stop_thread()
@@ -420,6 +461,14 @@ class OLEDDriver(DisplayDriver):
         self._init_display()
 
     def _init_display(self):
+        # Check I2C is available before attempting to import hardware libs
+        if not os.path.exists("/dev/i2c-1"):
+            log.warning(
+                "I2C not detected (/dev/i2c-1 missing). "
+                "OLED disabled. Reboot if I2C was just enabled, or run: "
+                "sudo raspi-config -> Interface Options -> I2C -> Yes"
+            )
+            return
         try:
             import board
             import busio

@@ -1,28 +1,20 @@
 #!/bin/bash
 ###############################################################################
 # Honeypot Kit - Install Script
-# Version: 11
+# Version: 12
 # Educational SSH honeypot (Cowrie) with health checks and OPSEC hardening
 #
 # Tested on: Raspberry Pi 4, 64-bit Raspberry Pi OS Debian Trixie (2026-06-18)
 #
 # Usage: sudo bash install-honeypot.sh
 #
-# v11 CHANGES:
-#   - Dependencies: python3-click, python3-rpi.gpio, python3-pil installed
-#     via apt (not pip) to avoid PEP 668 externally-managed-environment
-#     error on Debian Trixie; Adafruit OLED library still via pip with
-#     --break-system-packages, skipped gracefully if unavailable
-#   - fix_permissions: log dir set to 0777, monitor.log pre-created with
-#     0666 so pi user (monitor daemon) can write without permission error
-#   - monitor.py: fixed bare GPIO.HIGH/LOW references in _set() method
-#     to use self._GPIO.HIGH/LOW (module stored as self._GPIO not global)
-#   - cli.py: fixed shebang typo (evn -> env)
-#   - cli.py: require_root() check added to all commands that write config
-#     or touch hardware; exits with clear "Run as: sudo honeypot-kit..."
+# v12 CHANGES:
+#   - configure_i2c(): enables I2C automatically via /boot/firmware/config.txt
+#     (no raspi-config needed); installs i2c-tools; loads i2c modules for
+#     current session; takes full effect after reboot
 ###############################################################################
 
-VERSION="11"
+VERSION="12"
 GITHUB_RAW="https://raw.githubusercontent.com/ericburnsonline/honeypot-kit/main"
 
 # Colors
@@ -539,6 +531,13 @@ else
     echo "  [INFO] Auto-update timer not enabled (declined at install or disabled)"
 fi
 
+# 9. I2C interface
+if [ -e /dev/i2c-1 ]; then
+    echo "  [PASS] I2C enabled (/dev/i2c-1 present)"; ((PASS++))
+else
+    echo "  [WARN] I2C not detected - OLED will not work; reboot if just installed"; ((WARN++))
+fi
+
 echo ""
 echo "Results: $PASS passed, $WARN warnings, $FAIL failed"
 [ "$FAIL" -eq 0 ] && exit 0 || exit 1
@@ -787,6 +786,32 @@ SERVICEEOF
     log_info "Cowrie service created and enabled."
 }
 
+configure_i2c() {
+    log_info "Enabling I2C interface..."
+
+    # Enable I2C via config.txt - works on Trixie without raspi-config
+    # Takes effect after reboot (which the script already prompts for)
+    CONFIG="/boot/firmware/config.txt"
+    if [ ! -f "$CONFIG" ]; then
+        CONFIG="/boot/config.txt"  # fallback for older Pi OS layouts
+    fi
+
+    if grep -q "^dtparam=i2c_arm=on" "$CONFIG" 2>/dev/null; then
+        log_info "I2C already enabled in $CONFIG."
+    else
+        echo "dtparam=i2c_arm=on" >> "$CONFIG"
+        log_info "I2C enabled in $CONFIG (takes effect after reboot)."
+    fi
+
+    # Also load the module now for the current session
+    modprobe i2c-dev > /dev/null 2>&1 || true
+    modprobe i2c-bcm2835 > /dev/null 2>&1 || true
+
+    # Install i2c-tools so user can run i2cdetect
+    apt-get install -y i2c-tools > /dev/null 2>&1
+    log_info "i2c-tools installed (run: i2cdetect -y 1)"
+}
+
 harden_system() {
     log_info "Applying basic hardening..."
     sed -i 's/^#\?PermitRootLogin.*/PermitRootLogin prohibit-password/' /etc/ssh/sshd_config 2>/dev/null || true
@@ -822,6 +847,7 @@ show_summary() {
     echo "  Hostname              : $(hostname)"
     echo "  Install location      : $HONEYPOT_HOME"
     echo "  Logs                  : $COWRIE_HOME/var/log/cowrie/cowrie.log"
+    echo "  I2C                   : enabled (takes effect after reboot)"
     echo ""
     echo "Hardware Modules (disabled by default)"
     echo "  honeypot-kit status                show current config"
@@ -896,6 +922,7 @@ main() {
     install_auto_update
     create_systemd_service
     create_monitor_service
+    configure_i2c
     harden_system
 
     log_info "Starting Cowrie..."

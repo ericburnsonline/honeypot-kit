@@ -49,7 +49,12 @@ sudo ufw status
 - [ ] UFW active
 - [ ] Port 22 allowed
 - [ ] Real SSH port allowed
-- [ ] Port 8000 restricted to dashboard subnet only
+
+```bash
+sudo ufw status | grep 8000
+```
+
+- [ ] Port 8000 shows DENY or restricted to dashboard subnet (not open to all)
 
 ---
 
@@ -177,6 +182,11 @@ Disconnect.
 ## Phase 6 - CLI Verification
 
 Run each command and confirm expected output:
+
+```bash
+honeypot-kit --version
+```
+- [ ] Shows `honeypot-kit, version 2` (or current version)
 
 ```bash
 honeypot-kit status

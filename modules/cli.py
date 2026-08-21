@@ -155,7 +155,7 @@ def oled():
     pass
 
 
-@oled.command()
+@oled.command("enable")
 def oled_enable():
     """Enable the OLED display."""
     require_root()
@@ -171,7 +171,7 @@ def oled_enable():
     click.echo("Restart the monitor service: honeypot-kit monitor restart")
 
 
-@oled.command()
+@oled.command("disable")
 def oled_disable():
     """Disable the OLED display."""
     require_root()
@@ -220,7 +220,7 @@ def oled_set_resolution(resolution):
     click.echo(f"OLED resolution set to {resolution}.")
 
 
-@oled.command()
+@oled.command("test")
 @click.option("--keep", is_flag=True, default=False,
               help="Leave test image on screen instead of clearing after 3 seconds.")
 def oled_test(keep):
@@ -292,7 +292,7 @@ def led():
     pass
 
 
-@led.command()
+@led.command("enable")
 def led_enable():
     """Enable the LED status indicators."""
     require_root()
@@ -303,7 +303,7 @@ def led_enable():
     click.echo("Restart the monitor service: honeypot-kit monitor restart")
 
 
-@led.command()
+@led.command("disable")
 def led_disable():
     """Disable the LED status indicators."""
     require_root()
@@ -355,7 +355,7 @@ def led_clear_alert():
         sys.exit(1)
 
 
-@led.command()
+@led.command("test")
 def led_test():
     """Test LEDs by flashing each one in sequence."""
     require_root()
@@ -411,7 +411,7 @@ def monitor():
     pass
 
 
-@monitor.command()
+@monitor.command("start")
 def monitor_start():
     """Start the hardware monitor service."""
     require_root()
@@ -426,7 +426,7 @@ def monitor_start():
         sys.exit(1)
 
 
-@monitor.command()
+@monitor.command("stop")
 def monitor_stop():
     """Stop the hardware monitor service."""
     require_root()
@@ -438,7 +438,7 @@ def monitor_stop():
         sys.exit(1)
 
 
-@monitor.command()
+@monitor.command("restart")
 def monitor_restart():
     """Restart the hardware monitor service."""
     require_root()
@@ -532,7 +532,7 @@ def now():
         sys.exit(1)
 
 
-@update.command()
+@update.command("enable")
 def update_enable():
     """Enable automatic weekly updates."""
     require_root()
@@ -555,7 +555,7 @@ def update_enable():
         sys.exit(1)
 
 
-@update.command()
+@update.command("disable")
 def update_disable():
     """Disable automatic weekly updates."""
     require_root()

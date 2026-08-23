@@ -19,14 +19,27 @@
       "name": "openai",
       "display_name": "OpenAI",
       "description": "AI-powered SSH session analysis using the Responses API",
-      "stage": 1,
+      "stage": 2,
       "status": "available",
       "doc": "docs/integrations/openai.md",
-      "files": [],
+      "files": [
+        {
+          "src": "integrations/openai/requirements.txt",
+          "dst": "requirements.txt"
+        },
+        {
+          "src": "integrations/openai/install.sh",
+          "dst": "install.sh"
+        },
+        {
+          "src": "integrations/openai/analyzer.py",
+          "dst": "analyzer.py"
+        }
+      ],
       "requires": [],
-      "cli_subcommand": null,
+      "cli_subcommand": "ai",
       "smoke_test_module": null,
-      "notes": "Stage 1 doc available. Working integration (Stage 2) in development."
+      "notes": "Stage 2 available. Install: honeypot-kit integration install openai"
     },
     {
       "name": "sentry",

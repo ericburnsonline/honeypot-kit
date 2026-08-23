@@ -1,11 +1,11 @@
 #!/bin/bash
 ###############################################################################
 # Honeypot Kit - OpenAI Integration Setup Script
-# Version: 2
+# Version: 3
 # Run automatically by: honeypot-kit integration install openai
 ###############################################################################
 
-INSTALL_VERSION="2"
+INSTALL_VERSION="3"
 
 INTG_DIR="/opt/honeypot/integrations/openai"
 CONF_FILE="$INTG_DIR/config.json"
@@ -13,9 +13,16 @@ CONF_FILE="$INTG_DIR/config.json"
 echo "Setting up OpenAI integration..."
 
 # Install Python package
-pip3 install --quiet --break-system-packages openai 2>/dev/null || \
-    pip3 install --quiet openai 2>/dev/null || \
-    echo "WARNING: Could not install openai package. Run manually: pip3 install openai"
+# Install openai Python package
+# On Debian Trixie, --break-system-packages is required
+# --ignore-installed prevents conflicts with apt-managed packages like typing_extensions
+echo "  Installing openai Python package..."
+if pip3 install --quiet --break-system-packages --ignore-installed openai 2>&1; then
+    echo "  openai package installed."
+else
+    echo "  WARNING: pip install failed."
+    echo "  If AI analysis fails, run: sudo pip3 install --break-system-packages --ignore-installed openai"
+fi
 
 # Create config template if not already present
 # Never overwrite an existing config (would wipe the API key)

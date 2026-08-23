@@ -477,7 +477,7 @@ def update():
     pass
 
 
-@update.command()
+@update.command("status")
 def status():
     """Show auto-update status and last update log entries."""
     import configparser
@@ -505,7 +505,7 @@ def status():
     click.echo("")
 
 
-@update.command()
+@update.command("now")
 def now():
     """Run an update check immediately."""
     require_root()

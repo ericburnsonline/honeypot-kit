@@ -149,6 +149,7 @@ The monitor daemon drives the LEDs with distinct patterns:
 | State | Green | Yellow | Red |
 |-------|-------|--------|-----|
 | Healthy, idle | Solid | Off | Off |
+| Login history (someone was in) | Solid | Off | Slow blink every 3s |
 | Active attack session | Solid | Slow flash (1s) | Off |
 | High attack rate (>10/min) | Solid | Fast flash (0.25s) | Off |
 | Warning (disk >85%, mem >90%) | Off | Solid | Off |
@@ -156,6 +157,16 @@ The monitor daemon drives the LEDs with distinct patterns:
 | Critical (disk >95%) | Off | Off | Solid |
 | Critical error | Off | Off | Fast flash |
 | Startup sequence | All three flash in sequence | | |
+
+The **login history** state persists even after a session ends, so you
+can see at a glance that someone logged in - even if you weren't watching
+at the time. It also survives monitor restarts. Clear it once you've
+noted the intrusion:
+
+```bash
+sudo honeypot-kit led clear-alert
+sudo honeypot-kit monitor restart
+```
 
 ---
 

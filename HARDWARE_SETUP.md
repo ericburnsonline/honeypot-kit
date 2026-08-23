@@ -6,6 +6,8 @@ module for Honeypot Kit. Both are disabled by default and configured via the
 
 ---
 
+![Wiring Diagram](docs/images/honeypot-kit_bb.png)
+
 ## Required Components
 
 | Component | Description | Approx Cost |

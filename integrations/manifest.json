@@ -1,0 +1,84 @@
+{
+  "manifest_version": "1",
+  "updated": "2026-08-23",
+  "integrations": [
+    {
+      "name": "grafana",
+      "display_name": "Grafana",
+      "description": "Attack visualization dashboards via Prometheus and Loki",
+      "stage": 1,
+      "status": "available",
+      "doc": "docs/integrations/grafana.md",
+      "files": [],
+      "requires": [],
+      "cli_subcommand": null,
+      "smoke_test_module": null,
+      "notes": "Stage 1 doc available. Working integration (Stage 2) planned."
+    },
+    {
+      "name": "openai",
+      "display_name": "OpenAI",
+      "description": "AI-powered SSH session analysis using the Responses API",
+      "stage": 1,
+      "status": "available",
+      "doc": "docs/integrations/openai.md",
+      "files": [],
+      "requires": [],
+      "cli_subcommand": null,
+      "smoke_test_module": null,
+      "notes": "Stage 1 doc available. Working integration (Stage 2) in development."
+    },
+    {
+      "name": "sentry",
+      "display_name": "Sentry",
+      "description": "Application observability for Honeypot Kit software components",
+      "stage": 1,
+      "status": "planned",
+      "doc": null,
+      "files": [],
+      "requires": [],
+      "cli_subcommand": null,
+      "smoke_test_module": null,
+      "notes": "Stage 1 doc planned."
+    },
+    {
+      "name": "alerting",
+      "display_name": "Alerting (Slack / PagerDuty)",
+      "description": "Real-time alerts when attack thresholds are exceeded",
+      "stage": 1,
+      "status": "planned",
+      "doc": null,
+      "files": [],
+      "requires": [],
+      "cli_subcommand": null,
+      "smoke_test_module": null,
+      "notes": "Stage 1 doc planned."
+    },
+    {
+      "name": "kafka",
+      "display_name": "Kafka / Redpanda",
+      "description": "Real-time event streaming from Cowrie to downstream consumers",
+      "stage": 1,
+      "status": "planned",
+      "doc": null,
+      "files": [],
+      "requires": [],
+      "cli_subcommand": null,
+      "smoke_test_module": null,
+      "notes": "Stage 1 doc planned. Redpanda recommended for Pi."
+    },
+    {
+      "name": "siem",
+      "display_name": "SIEM (Wazuh)",
+      "description": "Ship Cowrie logs to Wazuh for security event correlation",
+      "stage": 1,
+      "status": "planned",
+      "doc": null,
+      "files": [],
+      "requires": [],
+      "cli_subcommand": null,
+      "smoke_test_module": null,
+      "notes": "Stage 1 doc planned."
+    }
+  ]
+}

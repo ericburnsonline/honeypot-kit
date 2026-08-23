@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Honeypot Kit - Hardware Monitor Daemon
-Version: 1
+Version: 2
 
 Drives the OLED display and LED status indicators based on live
 honeypot state. Reads Cowrie's JSON log and system metrics, updates
@@ -102,7 +102,7 @@ class HoneypotState:
         self.mem_pct         = 0
         self.uptime_str      = "unknown"
         self.ip_address      = "unknown"
-        self._log_pos        = 0
+        self._log_pos        = os.path.getsize(COWRIE_LOG) if os.path.exists(COWRIE_LOG) else 0
         self._last_read      = 0
 
     def _load_login_history(self):

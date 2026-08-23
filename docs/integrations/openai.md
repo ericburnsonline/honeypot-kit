@@ -102,16 +102,17 @@ You need an OpenAI API key to use this integration. Here is how to get one:
 **Important - set a spending limit before you start:**
 
 A misconfigured `auto_analyze` setting on a busy honeypot could send many sessions
-to the API and generate unexpected charges. Set a monthly spending cap before
+to the API and generate unexpected charges. Set a monthly hard spending cap before
 enabling the integration:
 
-1. Go to **Settings** → **Billing** → **Usage limits**
-2. Set a **Monthly budget** you are comfortable with (e.g. $5-10 to start)
-3. OpenAI will stop API calls when the limit is reached
+1. Go to **Settings** → **Limits** in the OpenAI API Platform
+2. Set a **Monthly hard limit** you are comfortable with (e.g. $5-10 to start)
+3. Once the limit is hit, API calls return a 429 error and stop until the next month
 
 At current pricing, typical honeypot usage costs well under $1/day, but the
-limit protects you if attack traffic spikes or `auto_analyze` is left enabled
-on a very active system.
+hard limit protects you if attack traffic spikes or `auto_analyze` is left enabled
+on a very active system. As of mid-2026, OpenAI hard limits are a true stop,
+not just a notification.
 
 **Billing note:** OpenAI requires a payment method to use the API even for small
 amounts. The free tier (if available) covers limited usage. Check

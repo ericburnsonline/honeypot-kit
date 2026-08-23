@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Honeypot Kit CLI
-Version: 3
+Version: 4
 Manage hardware modules (OLED display, status LEDs) for Honeypot Kit.
 
 Usage:
@@ -87,7 +87,7 @@ def _systemctl(action, service=SERVICE):
         return False, str(e)
 
 
-VERSION = "3"
+VERSION = "4"
 
 
 @click.group()
@@ -167,8 +167,10 @@ def oled_enable():
     config = load_config()
     config["oled"]["enabled"] = "true"
     save_config(config)
+    # Enable systemd service so monitor starts on reboot
+    _systemctl("enable", "honeypot-monitor")
     click.echo("OLED display enabled.")
-    click.echo("Restart the monitor service: honeypot-kit monitor restart")
+    click.echo("Start or restart the monitor: sudo honeypot-kit monitor start")
 
 
 @oled.command("disable")
@@ -178,8 +180,14 @@ def oled_disable():
     config = load_config()
     config["oled"]["enabled"] = "false"
     save_config(config)
-    click.echo("OLED display disabled.")
-    click.echo("Restart the monitor service: honeypot-kit monitor restart")
+    # Disable systemd service if both modules now disabled
+    led_on = config["led"].get("enabled", "false").lower() == "true"
+    if not led_on:
+        _systemctl("disable", "honeypot-monitor")
+        click.echo("OLED display disabled. Monitor service disabled (no modules active).")
+    else:
+        click.echo("OLED display disabled. LED still active - monitor service remains enabled.")
+    click.echo("Restart the monitor: sudo honeypot-kit monitor restart")
 
 
 @oled.command("set-address")
@@ -210,6 +218,7 @@ def oled_set_address(address):
 @click.argument("resolution")
 def oled_set_resolution(resolution):
     """Set the display resolution (128x64, 128x32, 96x16, 128x128)."""
+    require_root()
     if resolution not in SUPPORTED_RESOLUTIONS:
         click.echo(f"ERROR: Unsupported resolution '{resolution}'.")
         click.echo(f"  Supported: {', '.join(SUPPORTED_RESOLUTIONS)}")
@@ -299,8 +308,10 @@ def led_enable():
     config = load_config()
     config["led"]["enabled"] = "true"
     save_config(config)
+    # Enable systemd service so monitor starts on reboot
+    _systemctl("enable", "honeypot-monitor")
     click.echo("LED indicators enabled.")
-    click.echo("Restart the monitor service: honeypot-kit monitor restart")
+    click.echo("Start or restart the monitor: sudo honeypot-kit monitor start")
 
 
 @led.command("disable")
@@ -310,8 +321,14 @@ def led_disable():
     config = load_config()
     config["led"]["enabled"] = "false"
     save_config(config)
-    click.echo("LED indicators disabled.")
-    click.echo("Restart the monitor service: honeypot-kit monitor restart")
+    # Disable systemd service if both modules now disabled
+    oled_on = config["oled"].get("enabled", "false").lower() == "true"
+    if not oled_on:
+        _systemctl("disable", "honeypot-monitor")
+        click.echo("LED indicators disabled. Monitor service disabled (no modules active).")
+    else:
+        click.echo("LED indicators disabled. OLED still active - monitor service remains enabled.")
+    click.echo("Restart the monitor: sudo honeypot-kit monitor restart")
 
 
 @led.command("set-pins")

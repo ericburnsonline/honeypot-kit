@@ -1,8 +1,11 @@
 #!/bin/bash
 ###############################################################################
 # Honeypot Kit - OpenAI Integration Setup Script
+# Version: 2
 # Run automatically by: honeypot-kit integration install openai
 ###############################################################################
+
+INSTALL_VERSION="2"
 
 INTG_DIR="/opt/honeypot/integrations/openai"
 CONF_FILE="$INTG_DIR/config.json"
@@ -29,7 +32,10 @@ if [ ! -f "$CONF_FILE" ]; then
   "notes": "Set api_key and set enabled=true to activate. Never commit this file."
 }
 CONFEOF
-    chmod 600 "$CONF_FILE"
+    # Set ownership so the installing user can read the config without sudo
+    REAL_USER="${SUDO_USER:-$(logname 2>/dev/null || echo pi)}"
+    chmod 640 "$CONF_FILE"
+    chown "root:${REAL_USER}" "$CONF_FILE" 2>/dev/null || chmod 644 "$CONF_FILE"
     echo "Config template created at $CONF_FILE"
     echo "IMPORTANT: Edit $CONF_FILE and add your OpenAI API key."
 else
@@ -57,7 +63,7 @@ Sessions:
 Run evals: honeypot-kit ai eval
 EVALEOF
 
-echo "OpenAI integration setup complete."
+echo "OpenAI integration setup complete (install.sh v${INSTALL_VERSION})."
 echo ""
 echo "Next steps:"
 echo "  1. Edit $CONF_FILE and add your OpenAI API key"

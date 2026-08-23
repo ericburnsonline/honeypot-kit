@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Honeypot Kit CLI
-Version: 4
+Version: 5
 Manage hardware modules (OLED display, status LEDs) for Honeypot Kit.
 
 Usage:
@@ -87,7 +87,7 @@ def _systemctl(action, service=SERVICE):
         return False, str(e)
 
 
-VERSION = "4"
+VERSION = "5"
 
 
 @click.group()
@@ -807,6 +807,129 @@ def integration_uninstall(name):
     except Exception as e:
         click.echo(f"ERROR: Could not remove {intg_dir}: {e}")
         sys.exit(1)
+
+
+
+# ---------------------------------------------------------------------------
+# AI ANALYSIS (OpenAI integration)
+# ---------------------------------------------------------------------------
+
+AI_INTG_DIR  = "/opt/honeypot/integrations/openai"
+AI_CONF_FILE = f"{AI_INTG_DIR}/config.json"
+AI_ANALYZER  = f"{AI_INTG_DIR}/analyzer.py"
+
+
+def _ai_check_installed():
+    """Exit with clear message if OpenAI integration is not installed."""
+    if not os.path.exists(AI_ANALYZER):
+        click.echo("ERROR: OpenAI integration is not installed.")
+        click.echo("  Run: honeypot-kit integration install openai")
+        sys.exit(1)
+
+
+def _ai_run(args):
+    """Run the analyzer script with given arguments."""
+    _ai_check_installed()
+    result = subprocess.run(
+        ["python3", AI_ANALYZER] + args,
+        capture_output=False
+    )
+    return result.returncode
+
+
+@cli.group()
+def ai():
+    """Manage the OpenAI session analysis integration."""
+    pass
+
+
+@ai.command()
+def status():
+    """Show OpenAI integration configuration and status."""
+    if not os.path.exists(AI_ANALYZER):
+        click.echo("\n  OpenAI integration : " + click.style("not installed", fg="yellow"))
+        click.echo("  Run: honeypot-kit integration install openai\n")
+        return
+
+    click.echo("\n=== OpenAI Integration Status ===\n")
+    click.echo(f"  Installed : {click.style('yes', fg='green')}")
+
+    if os.path.exists(AI_CONF_FILE):
+        try:
+            with open(AI_CONF_FILE) as f:
+                config = json.load(f)
+            api_key  = config.get("api_key", "").strip()
+            enabled  = config.get("enabled", False)
+            model    = config.get("model", "gpt-4o-mini")
+            key_set  = click.style("set", fg="green") if api_key else click.style("NOT SET", fg="red")
+            ena_str  = click.style("enabled", fg="green") if enabled else click.style("disabled", fg="yellow")
+            click.echo(f"  API key   : {key_set}")
+            click.echo(f"  Status    : {ena_str}")
+            click.echo(f"  Model     : {model}")
+        except Exception as e:
+            click.echo(f"  Config error: {e}")
+    else:
+        click.echo(f"  Config    : {click.style('missing', fg='red')}")
+        click.echo(f"  Run setup : honeypot-kit integration install openai")
+
+    click.echo(f"\n  Config file: {AI_CONF_FILE}\n")
+
+
+@ai.command()
+def test():
+    """Test the OpenAI API connection."""
+    _ai_run(["--test"])
+
+
+@ai.command("analyze")
+@click.option("--latest",  is_flag=True, default=False, help="Analyze most recent session")
+@click.option("--session", default=None,                help="Analyze session by ID")
+@click.option("--max-age-hours", default=24, type=int,  help="Look back N hours (default 24)")
+def ai_analyze(latest, session, max_age_hours):
+    """Analyze a Cowrie SSH session with OpenAI."""
+    if not latest and not session:
+        click.echo("ERROR: Specify --latest or --session <id>")
+        sys.exit(1)
+    args = [f"--max-age-hours={max_age_hours}"]
+    if latest:
+        args.append("--latest")
+    elif session:
+        args.extend(["--session", session])
+    _ai_run(args)
+
+
+@ai.command()
+def history():
+    """Show recent AI analyses."""
+    _ai_run(["--history"])
+
+
+@ai.command()
+def eval():
+    """Run eval sessions to test analyzer quality and injection safety."""
+    _ai_run(["--eval"])
+
+
+@ai.command("configure")
+def ai_configure():
+    """Open the OpenAI integration config file for editing."""
+    _ai_check_installed()
+    if not os.path.exists(AI_CONF_FILE):
+        click.echo(f"ERROR: Config not found: {AI_CONF_FILE}")
+        click.echo("  Run: honeypot-kit integration install openai")
+        sys.exit(1)
+    click.echo(f"Config file: {AI_CONF_FILE}")
+    click.echo("")
+    click.echo("Edit this file to set your API key and enable the integration:")
+    click.echo(f"  nano {AI_CONF_FILE}")
+    click.echo("")
+    click.echo("Fields:")
+    click.echo('  "api_key"         : your OpenAI API key (sk-...)')
+    click.echo('  "enabled"         : true to activate')
+    click.echo('  "model"           : model to use (default: gpt-4o-mini)')
+    click.echo('  "auto_analyze"    : true to analyze sessions automatically')
+    click.echo('  "redact_ips"      : true to redact attacker IPs before sending')
+    click.echo('  "redact_passwords": true to redact passwords (recommended)')
 
 
 if __name__ == "__main__":

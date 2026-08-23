@@ -86,6 +86,35 @@ Switching providers requires only a config change, not a code rewrite.
 
 ## OpenAI Integration Details
 
+### Getting an API Key
+
+You need an OpenAI API key to use this integration. Here is how to get one:
+
+1. Go to [platform.openai.com](https://platform.openai.com) and sign up or log in
+2. Click your profile icon (top right) → **API keys** in the left sidebar
+3. Click **Create new secret key** - give it a name like "honeypot-kit"
+4. **Copy the key immediately** - it starts with `sk-` and OpenAI will not show it again
+5. Paste it into your config file at `/opt/honeypot/integrations/openai/config.json`
+
+**Important - set a spending limit before you start:**
+
+A misconfigured `auto_analyze` setting on a busy honeypot could send many sessions
+to the API and generate unexpected charges. Set a monthly spending cap before
+enabling the integration:
+
+1. Go to **Settings** → **Billing** → **Usage limits**
+2. Set a **Monthly budget** you are comfortable with (e.g. $5-10 to start)
+3. OpenAI will stop API calls when the limit is reached
+
+At current pricing, typical honeypot usage costs well under $1/day, but the
+limit protects you if attack traffic spikes or `auto_analyze` is left enabled
+on a very active system.
+
+**Billing note:** OpenAI requires a payment method to use the API even for small
+amounts. The free tier (if available) covers limited usage. Check
+[platform.openai.com/account/billing](https://platform.openai.com/account/billing)
+for current tier information.
+
 ### API Used
 
 **OpenAI Responses API with Structured Outputs**

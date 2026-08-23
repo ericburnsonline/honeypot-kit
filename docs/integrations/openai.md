@@ -93,7 +93,10 @@ You need an OpenAI API key to use this integration. Here is how to get one:
 1. Go to [platform.openai.com](https://platform.openai.com) and sign up or log in
 2. Click your profile icon (top right) → **API keys** in the left sidebar
 3. Click **Create new secret key** - give it a name like "honeypot-kit"
-4. **Copy the key immediately** - it starts with `sk-` and OpenAI will not show it again
+4. **Set permissions** - choose **Restricted**, then under Model capabilities
+   enable **Responses - Write** only. Write is required to send sessions to
+   the API and receive analysis back. Leave Realtime and all other options unchecked.
+5. **Copy the key immediately** - OpenAI will not show it again after you close the dialog
 5. Paste it into your config file at `/opt/honeypot/integrations/openai/config.json`
 
 **Important - set a spending limit before you start:**

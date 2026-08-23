@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Honeypot Kit CLI
-Version: 2
+Version: 3
 Manage hardware modules (OLED display, status LEDs) for Honeypot Kit.
 
 Usage:
@@ -87,7 +87,7 @@ def _systemctl(action, service=SERVICE):
         return False, str(e)
 
 
-VERSION = "2"
+VERSION = "3"
 
 
 @click.group()
@@ -573,6 +573,222 @@ def update_disable():
         click.echo("Auto-update disabled.")
     else:
         click.echo(f"ERROR: Could not disable update timer. {err}")
+        sys.exit(1)
+
+
+
+# ---------------------------------------------------------------------------
+# INTEGRATION MANAGER
+# ---------------------------------------------------------------------------
+
+GITHUB_RAW      = "https://raw.githubusercontent.com/ericburnsonline/honeypot-kit/main"
+MANIFEST_URL    = f"{GITHUB_RAW}/integrations/manifest.json"
+INTEGRATIONS_DIR = "/opt/honeypot/integrations"
+
+
+def fetch_manifest():
+    """Download and parse the integration manifest from GitHub."""
+    try:
+        import urllib.request
+        with urllib.request.urlopen(MANIFEST_URL, timeout=10) as resp:
+            return json.loads(resp.read().decode())
+    except Exception as e:
+        click.echo(f"ERROR: Could not fetch integration manifest - {e}")
+        click.echo(f"  Check network and try again.")
+        sys.exit(1)
+
+
+def installed_integrations():
+    """Return set of integration names that are installed locally."""
+    installed = set()
+    if not os.path.exists(INTEGRATIONS_DIR):
+        return installed
+    for name in os.listdir(INTEGRATIONS_DIR):
+        marker = os.path.join(INTEGRATIONS_DIR, name, ".installed")
+        if os.path.exists(marker):
+            installed.add(name)
+    return installed
+
+
+@cli.group()
+def integration():
+    """Manage Honeypot Kit integrations."""
+    pass
+
+
+@integration.command("list")
+def integration_list():
+    """List available integrations and their status."""
+    manifest = fetch_manifest()
+    installed = installed_integrations()
+
+    click.echo("")
+    click.echo("=== Honeypot Kit Integrations ===")
+    click.echo(f"  Manifest version : {manifest.get('manifest_version', '?')}")
+    click.echo(f"  Updated          : {manifest.get('updated', '?')}")
+    click.echo("")
+
+    stage_labels = {1: "Stage 1 - Doc", 2: "Stage 2 - Install", 3: "Stage 3 - DIY"}
+
+    for intg in manifest.get("integrations", []):
+        name         = intg["name"]
+        display      = intg["display_name"]
+        description  = intg["description"]
+        stage        = intg.get("stage", 1)
+        status       = intg.get("status", "planned")
+        notes        = intg.get("notes", "")
+        is_installed = name in installed
+        can_install  = stage >= 2 and status == "available"
+
+        if is_installed:
+            state = click.style("INSTALLED", fg="green")
+        elif can_install:
+            state = click.style("available", fg="cyan")
+        else:
+            state = click.style("planned", fg="yellow")
+
+        click.echo(f"  {display:<30} {state}")
+        click.echo(f"    {description}")
+        click.echo(f"    {stage_labels.get(stage, 'Unknown')}  |  {notes}")
+        click.echo("")
+
+
+@integration.command("install")
+@click.argument("name")
+def integration_install(name):
+    """Install an integration by name."""
+    require_root()
+    manifest = fetch_manifest()
+    installed = installed_integrations()
+
+    # Find the integration in the manifest
+    intg = next((i for i in manifest.get("integrations", []) if i["name"] == name), None)
+
+    if not intg:
+        click.echo(f"ERROR: Unknown integration '{name}'.")
+        click.echo("  Run: honeypot-kit integration list")
+        sys.exit(1)
+
+    if intg.get("stage", 1) < 2:
+        click.echo(f"ERROR: '{name}' is Stage 1 only - no installable files yet.")
+        click.echo(f"  Read the overview doc first:")
+        if intg.get("doc"):
+            click.echo(f"  https://github.com/ericburnsonline/honeypot-kit/blob/main/{intg['doc']}")
+        sys.exit(1)
+
+    if intg.get("status") != "available":
+        click.echo(f"ERROR: '{name}' is not yet available for install (status: {intg.get('status')}).")
+        sys.exit(1)
+
+    if name in installed:
+        click.echo(f"'{name}' is already installed.")
+        click.echo(f"  To reinstall: remove /opt/honeypot/integrations/{name}/.installed first.")
+        sys.exit(0)
+
+    click.echo(f"Installing {intg['display_name']}...")
+
+    # Create integration directory
+    intg_dir = os.path.join(INTEGRATIONS_DIR, name)
+    os.makedirs(intg_dir, exist_ok=True)
+
+    # Download integration files
+    import urllib.request
+    files = intg.get("files", [])
+    for file_entry in files:
+        src_path = file_entry["src"]
+        dst_path = os.path.join(intg_dir, file_entry["dst"])
+        url = f"{GITHUB_RAW}/{src_path}"
+        os.makedirs(os.path.dirname(dst_path), exist_ok=True)
+        try:
+            urllib.request.urlretrieve(url, dst_path)
+            click.echo(f"  Downloaded: {file_entry['dst']}")
+        except Exception as e:
+            click.echo(f"  ERROR downloading {file_entry['dst']}: {e}")
+            sys.exit(1)
+
+    # Install any Python requirements
+    req_file = os.path.join(intg_dir, "requirements.txt")
+    if os.path.exists(req_file):
+        click.echo("  Installing Python dependencies...")
+        import subprocess as sp
+        result = sp.run(
+            ["pip3", "install", "--break-system-packages", "--quiet", "-r", req_file],
+            capture_output=True, text=True
+        )
+        if result.returncode != 0:
+            click.echo(f"  WARNING: Some dependencies may not have installed cleanly.")
+            click.echo(f"  {result.stderr.strip()}")
+
+    # Run integration setup script if present
+    setup_script = os.path.join(intg_dir, "install.sh")
+    if os.path.exists(setup_script):
+        click.echo("  Running setup script...")
+        os.chmod(setup_script, 0o755)
+        result = subprocess.run(["bash", setup_script], capture_output=True, text=True)
+        if result.returncode != 0:
+            click.echo(f"  ERROR in setup script:")
+            click.echo(f"  {result.stderr.strip()}")
+            sys.exit(1)
+
+    # Write installed marker
+    with open(os.path.join(intg_dir, ".installed"), "w") as f:
+        f.write(f"installed: {__import__('datetime').datetime.now().isoformat()}\n")
+        f.write(f"version: {intg.get('stage', 1)}\n")
+
+    click.echo(f"\n{intg['display_name']} installed successfully.")
+
+    # Show next steps
+    if intg.get("cli_subcommand"):
+        click.echo(f"  New CLI command: honeypot-kit {intg['cli_subcommand']} --help")
+    click.echo(f"  Restart monitor if needed: honeypot-kit monitor restart")
+
+
+@integration.command("status")
+def integration_status():
+    """Show installed integrations and their configuration."""
+    installed = installed_integrations()
+
+    click.echo("")
+    click.echo("=== Installed Integrations ===")
+    click.echo("")
+
+    if not installed:
+        click.echo("  No integrations installed.")
+        click.echo("  Run: honeypot-kit integration list")
+        click.echo("")
+        return
+
+    for name in sorted(installed):
+        intg_dir = os.path.join(INTEGRATIONS_DIR, name)
+        marker   = os.path.join(intg_dir, ".installed")
+        click.echo(f"  {name}")
+        try:
+            with open(marker) as f:
+                for line in f:
+                    click.echo(f"    {line.rstrip()}")
+        except Exception:
+            pass
+        click.echo("")
+
+
+@integration.command("uninstall")
+@click.argument("name")
+def integration_uninstall(name):
+    """Remove an installed integration."""
+    require_root()
+    intg_dir = os.path.join(INTEGRATIONS_DIR, name)
+    marker   = os.path.join(intg_dir, ".installed")
+
+    if not os.path.exists(marker):
+        click.echo(f"ERROR: '{name}' is not installed.")
+        sys.exit(1)
+
+    import shutil
+    try:
+        shutil.rmtree(intg_dir)
+        click.echo(f"'{name}' uninstalled.")
+    except Exception as e:
+        click.echo(f"ERROR: Could not remove {intg_dir}: {e}")
         sys.exit(1)
 
 

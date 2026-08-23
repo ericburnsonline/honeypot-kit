@@ -1,20 +1,25 @@
 #!/bin/bash
 ###############################################################################
 # Honeypot Kit - Install Script
-# Version: 12
+# Version: 13
 # Educational SSH honeypot (Cowrie) with health checks and OPSEC hardening
 #
 # Tested on: Raspberry Pi 4, 64-bit Raspberry Pi OS Debian Trixie (2026-06-18)
 #
 # Usage: sudo bash install-honeypot.sh
 #
-# v12 CHANGES:
-#   - configure_i2c(): enables I2C automatically via /boot/firmware/config.txt
-#     (no raspi-config needed); installs i2c-tools; loads i2c modules for
-#     current session; takes full effect after reboot
+# v13 CHANGES:
+#   - Cowrie JSON output explicitly enabled in cowrie.cfg after init;
+#     adds [output_jsonlog] section if missing, enables if present;
+#     monitor.py requires cowrie.json to exist for session tracking
+#   - honeypot-monitor.service: removed Wants=cowrie.service and
+#     cowrie.service from After= to prevent systemd SIGTERM on startup
+#     when cowrie is not yet confirmed running; now just After=network.target
+#   - fix_permissions: pre-creates monitor-state.json with correct
+#     permissions so pi user (monitor daemon) can write login_history state
 ###############################################################################
 
-VERSION="12"
+VERSION="13"
 GITHUB_RAW="https://raw.githubusercontent.com/ericburnsonline/honeypot-kit/main"
 
 # Colors
@@ -327,6 +332,23 @@ install_cowrie() {
         's|tcp:2222:interface=0.0.0.0|tcp:22:interface=0.0.0.0|g' \
         "$COWRIE_HOME/etc/cowrie.cfg"
 
+    # Enable JSON output so monitor.py can read structured events
+    # cowrie.cfg uses [output_jsonlog] section; enabled = true turns it on
+    if ! grep -q "^\[output_jsonlog\]" "$COWRIE_HOME/etc/cowrie.cfg"; then
+        cat >> "$COWRIE_HOME/etc/cowrie.cfg" << 'JSONEOF'
+
+[output_jsonlog]
+enabled = true
+logfile = ${honeypot:log_path}/cowrie.json
+JSONEOF
+        log_info "Cowrie JSON output enabled."
+    else
+        sudo -u "$COWRIE_USER" sed -i \
+            '/^\[output_jsonlog\]/,/^\[/ s/^enabled = false/enabled = true/' \
+            "$COWRIE_HOME/etc/cowrie.cfg"
+        log_info "Cowrie JSON output enabled."
+    fi
+
     log_info "Cowrie installed and configured on port 22."
 }
 
@@ -369,6 +391,9 @@ fix_permissions() {
     # Pre-create monitor log so permissions are set before daemon starts
     touch "$LOG_DIR/monitor.log"
     chmod 0666 "$LOG_DIR/monitor.log"
+    # Pre-create monitor state file so pi user (monitor daemon) can write it
+    echo '{"login_history": false}' > "$HONEYPOT_HOME/monitor-state.json"
+    chmod 0666 "$HONEYPOT_HOME/monitor-state.json"
 }
 
 configure_firewall() {
@@ -604,8 +629,7 @@ create_monitor_service() {
     cat > /etc/systemd/system/honeypot-monitor.service << MONEOF
 [Unit]
 Description=Honeypot Kit Hardware Monitor (OLED + LED)
-After=network.target cowrie.service
-Wants=cowrie.service
+After=network.target
 
 [Service]
 Type=simple

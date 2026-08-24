@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Honeypot Kit CLI
-Version: 5
+Version: 6
 Manage hardware modules (OLED display, status LEDs) for Honeypot Kit.
 
 Usage:
@@ -87,7 +87,7 @@ def _systemctl(action, service=SERVICE):
         return False, str(e)
 
 
-VERSION = "5"
+VERSION = "6"
 
 
 @click.group()
@@ -924,12 +924,23 @@ def ai_configure():
     click.echo(f"  nano {AI_CONF_FILE}")
     click.echo("")
     click.echo("Fields:")
-    click.echo('  "api_key"         : your OpenAI API key (sk-...)')
+    click.echo('  "api_key"         : your OpenAI API key from platform.openai.com')
     click.echo('  "enabled"         : true to activate')
     click.echo('  "model"           : model to use (default: gpt-4o-mini)')
     click.echo('  "auto_analyze"    : true to analyze sessions automatically')
     click.echo('  "redact_ips"      : true to redact attacker IPs before sending')
     click.echo('  "redact_passwords": true to redact passwords (recommended)')
+
+
+@cli.command()
+def menu():
+    """Launch the full-screen TUI menu interface."""
+    hk = "/usr/local/bin/hk"
+    if not os.path.exists(hk):
+        click.echo("ERROR: TUI not installed at /usr/local/bin/hk")
+        click.echo("  Run: sudo honeypot-kit update now")
+        sys.exit(1)
+    os.execv(hk, [hk])
 
 
 if __name__ == "__main__":

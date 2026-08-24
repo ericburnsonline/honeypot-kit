@@ -42,7 +42,15 @@ AI_ANALYSIS_DIR = f"{HONEYPOT_HOME}/integrations/openai/analysis"
 # Colors
 # ---------------------------------------------------------------------------
 
+GREEN  = 0
+YELLOW = 0
+RED    = 0
+CYAN   = 0
+NORMAL = 0
+SEL    = 0
+
 def init_colors():
+    global GREEN, YELLOW, RED, CYAN, NORMAL, SEL
     curses.start_color()
     curses.use_default_colors()
     curses.init_pair(1, curses.COLOR_GREEN,   -1)  # good / enabled
@@ -51,13 +59,12 @@ def init_colors():
     curses.init_pair(4, curses.COLOR_CYAN,    -1)  # highlight / header
     curses.init_pair(5, curses.COLOR_WHITE,   -1)  # normal
     curses.init_pair(6, curses.COLOR_BLACK,   curses.COLOR_WHITE)  # selected row
-
-GREEN  = curses.A_BOLD | curses.color_pair(1)
-YELLOW = curses.A_BOLD | curses.color_pair(2)
-RED    = curses.A_BOLD | curses.color_pair(3)
-CYAN   = curses.A_BOLD | curses.color_pair(4)
-NORMAL = curses.color_pair(5)
-SEL    = curses.color_pair(6)
+    GREEN  = curses.A_BOLD | curses.color_pair(1)
+    YELLOW = curses.A_BOLD | curses.color_pair(2)
+    RED    = curses.A_BOLD | curses.color_pair(3)
+    CYAN   = curses.A_BOLD | curses.color_pair(4)
+    NORMAL = curses.color_pair(5)
+    SEL    = curses.color_pair(6)
 
 # ---------------------------------------------------------------------------
 # Utility

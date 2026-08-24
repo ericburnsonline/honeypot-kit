@@ -1,7 +1,7 @@
 #!/bin/bash
 ###############################################################################
 # Honeypot Kit - Install Script
-# Version: 13
+# Version: 14
 # Educational SSH honeypot (Cowrie) with health checks and OPSEC hardening
 #
 # Tested on: Raspberry Pi 4, 64-bit Raspberry Pi OS Debian Trixie (2026-06-18)
@@ -19,7 +19,7 @@
 #     permissions so pi user (monitor daemon) can write login_history state
 ###############################################################################
 
-VERSION="13"
+VERSION="14"
 GITHUB_RAW="https://raw.githubusercontent.com/ericburnsonline/honeypot-kit/main"
 
 # Colors
@@ -611,6 +611,15 @@ install_cli() {
     else
         log_warn "CLI download failed. Check network and try: wget $GITHUB_RAW/modules/cli.py"
     fi
+
+    log_info "Downloading honeypot-kit TUI from GitHub..."
+    if wget -q "$GITHUB_RAW/modules/hk.py" -O "/usr/local/bin/hk"; then
+        chmod +x "/usr/local/bin/hk"
+        log_info "TUI installed at /usr/local/bin/hk"
+        log_info "Run the full menu interface with: hk"
+    else
+        log_warn "TUI download failed. Check network."
+    fi
 }
 
 install_monitor() {
@@ -683,6 +692,7 @@ log_update() { echo "[$TIMESTAMP] $1" >> "$LOG_FILE"; }
 declare -A UPDATE_FILES=(
     ["$GITHUB_RAW/modules/monitor.py"]="$MODULES_DIR/monitor.py"
     ["$GITHUB_RAW/modules/cli.py"]="$CLI_SCRIPT"
+    ["$GITHUB_RAW/modules/hk.py"]="/usr/local/bin/hk"
 )
 
 CHANGED=0

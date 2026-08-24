@@ -91,28 +91,34 @@ Switching providers requires only a config change, not a code rewrite.
 You need an OpenAI API key to use this integration. Here is how to get one:
 
 1. Go to [platform.openai.com](https://platform.openai.com) and sign up or log in
-2. Click your profile icon (top right) → **API keys** in the left sidebar
-3. Click **Create new secret key** - give it a name like "honeypot-kit"
-4. **Set permissions** - choose **Restricted**, then under Model capabilities
-   enable **Responses - Write** only. Write is required to send sessions to
-   the API and receive analysis back. Leave Realtime and all other options unchecked.
-5. **Copy the key immediately** - OpenAI will not show it again after you close the dialog
-5. Paste it into your config file at `/opt/honeypot/integrations/openai/config.json`
+2. Click **API keys** in the left sidebar
+3. Under **Project API Keys**, click **Create new secret key**
+4. Give it a name like "honeypot-kit"
+5. **Set permissions to All** - restricted keys require specific scope configuration
+   that can be difficult to get right. Use All permissions for simplicity.
+   The spending limit (below) is your primary cost protection.
+6. **Copy the key immediately** - OpenAI will not show it again after you close the dialog
+7. Paste it into your config file at `/opt/honeypot/integrations/openai/config.json`
 
-**Important - set a spending limit before you start:**
+**Note on restricted keys:** If you want to use a restricted key, enable
+**Model capabilities → Request**. If you still get permission errors, delete
+the key and create a new one - scope changes do not always take effect on
+existing keys.
+
+**Important - set a spending limit before heavy use:**
 
 A misconfigured `auto_analyze` setting on a busy honeypot could send many sessions
-to the API and generate unexpected charges. Set a monthly hard spending cap before
-enabling the integration:
+to the API and generate unexpected charges. Once you have added a payment method
+and have active billing, set a monthly hard spending cap:
 
 1. Go to **Settings** → **Limits** in the OpenAI API Platform
+   (this option appears after billing is configured)
 2. Set a **Monthly hard limit** you are comfortable with (e.g. $5-10 to start)
 3. Once the limit is hit, API calls return a 429 error and stop until the next month
 
-At current pricing, typical honeypot usage costs well under $1/day, but the
-hard limit protects you if attack traffic spikes or `auto_analyze` is left enabled
-on a very active system. As of mid-2026, OpenAI hard limits are a true stop,
-not just a notification.
+At current pricing, typical honeypot usage costs well under $1/day. Testing a
+handful of sessions costs cents. The hard limit protects you if attack traffic
+spikes or `auto_analyze` is left enabled on a very active system.
 
 **Billing note:** OpenAI requires a payment method to use the API even for small
 amounts. The free tier (if available) covers limited usage. Check

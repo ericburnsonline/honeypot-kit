@@ -1,11 +1,11 @@
 #!/bin/bash
 ###############################################################################
 # Honeypot Kit - OpenAI Integration Setup Script
-# Version: 3
+# Version: 4
 # Run automatically by: honeypot-kit integration install openai
 ###############################################################################
 
-INSTALL_VERSION="3"
+INSTALL_VERSION="4"
 
 INTG_DIR="/opt/honeypot/integrations/openai"
 CONF_FILE="$INTG_DIR/config.json"
@@ -49,10 +49,12 @@ else
     echo "Config already exists at $CONF_FILE - not overwritten."
 fi
 
-# Create sessions directory for analysis output and eval sessions
+# Create directories for analysis output and eval sessions
+# analysis/ must be writable by pi user (runs without sudo)
 mkdir -p "$INTG_DIR/sessions"
 mkdir -p "$INTG_DIR/evals"
 mkdir -p "$INTG_DIR/analysis"
+chmod 777 "$INTG_DIR/analysis"
 
 # Write eval session templates
 cat > "$INTG_DIR/evals/README.md" << 'EVALEOF'

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Honeypot Kit - OpenAI Session Analyzer
-Version: 2
+Version: 3
 
 Converts raw Cowrie SSH session data into structured, human-readable
 security analysis using the OpenAI Responses API with Structured Outputs.
@@ -404,7 +404,7 @@ def save_analysis(session_id, session_data, analysis):
     os.makedirs(ANALYSIS_DIR, exist_ok=True)
 
     result = {
-        "analyzed_at":   datetime.utcnow().isoformat(),
+        "analyzed_at":   datetime.now(timezone.utc).isoformat(),
         "session_id":    session_id,
         "session_summary": {
             "start_time":     session_data["start_time"],
@@ -416,7 +416,7 @@ def save_analysis(session_id, session_data, analysis):
         "analysis": analysis,
     }
 
-    filename = f"{ANALYSIS_DIR}/{session_id[:16]}_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.json"
+    filename = f"{ANALYSIS_DIR}/{session_id[:16]}_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.json"
     with open(filename, "w") as f:
         json.dump(result, f, indent=2)
 

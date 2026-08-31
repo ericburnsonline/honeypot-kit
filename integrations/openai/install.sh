@@ -1,11 +1,11 @@
 #!/bin/bash
 ###############################################################################
 # Honeypot Kit - OpenAI Integration Setup Script
-# Version: 4
+# Version: 5
 # Run automatically by: honeypot-kit integration install openai
 ###############################################################################
 
-INSTALL_VERSION="4"
+INSTALL_VERSION="5"
 
 INTG_DIR="/opt/honeypot/integrations/openai"
 CONF_FILE="$INTG_DIR/config.json"
@@ -73,6 +73,52 @@ Run evals: honeypot-kit ai eval
 EVALEOF
 
 echo "OpenAI integration setup complete (install.sh v${INSTALL_VERSION})."
+
+# Install smoke test fragment
+SMOKE_INTG_DIR="/opt/honeypot/scripts/smoke-tests/integrations"
+mkdir -p "$SMOKE_INTG_DIR"
+cat > "$SMOKE_INTG_DIR/openai.sh" << 'SMOKEEOF'
+#!/bin/bash
+# OpenAI integration smoke test fragment
+# Sourced by smoke-test.sh if /opt/honeypot/integrations/openai/.installed exists
+
+AI_CONF="/opt/honeypot/integrations/openai/config.json"
+AI_ANALYZER="/opt/honeypot/integrations/openai/analyzer.py"
+
+if [ -f "$AI_CONF" ]; then
+    echo "  [PASS] OpenAI config present"; ((PASS++))
+else
+    echo "  [FAIL] OpenAI config missing at $AI_CONF"; ((FAIL++))
+fi
+
+if [ -f "$AI_ANALYZER" ]; then
+    echo "  [PASS] OpenAI analyzer present"; ((PASS++))
+else
+    echo "  [FAIL] OpenAI analyzer missing at $AI_ANALYZER"; ((FAIL++))
+fi
+
+if [ -f "$AI_CONF" ]; then
+    ENABLED=$(python3 -c "import json; c=json.load(open('$AI_CONF')); print(c.get('enabled',False))" 2>/dev/null)
+    KEY=$(python3 -c "import json; c=json.load(open('$AI_CONF')); print(bool(c.get('api_key','').strip()))" 2>/dev/null)
+
+    if [ "$ENABLED" = "True" ] && [ "$KEY" = "True" ]; then
+        echo "  [PASS] OpenAI integration enabled with API key"; ((PASS++))
+    elif [ "$KEY" != "True" ]; then
+        echo "  [WARN] OpenAI API key not set - run: honeypot-kit ai configure"; ((WARN++))
+    else
+        echo "  [WARN] OpenAI integration installed but disabled"; ((WARN++))
+    fi
+fi
+
+# Check openai package importable
+if python3 -c "import openai" 2>/dev/null; then
+    echo "  [PASS] openai Python package installed"; ((PASS++))
+else
+    echo "  [FAIL] openai Python package not found - run: sudo pip3 install --break-system-packages --ignore-installed openai"; ((FAIL++))
+fi
+SMOKEEOF
+chmod +x "$SMOKE_INTG_DIR/openai.sh"
+echo "  Smoke test fragment installed."
 echo ""
 echo "Next steps:"
 echo "  1. Edit $CONF_FILE and add your OpenAI API key"

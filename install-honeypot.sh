@@ -1,7 +1,7 @@
 #!/bin/bash
 ###############################################################################
 # Honeypot Kit - Install Script
-# Version: 14
+# Version: 15
 # Educational SSH honeypot (Cowrie) with health checks and OPSEC hardening
 #
 # Tested on: Raspberry Pi 4, 64-bit Raspberry Pi OS Debian Trixie (2026-06-18)
@@ -19,7 +19,7 @@
 #     permissions so pi user (monitor daemon) can write login_history state
 ###############################################################################
 
-VERSION="14"
+VERSION="15"
 GITHUB_RAW="https://raw.githubusercontent.com/ericburnsonline/honeypot-kit/main"
 
 # Colors
@@ -476,29 +476,61 @@ CRONEOF
 }
 
 install_smoke_test() {
-    log_info "Installing smoke test..."
+    log_info "Installing modular smoke test..."
 
-    # Write shebang and SSH_PORT first, then append the rest
-    # with a QUOTED heredoc so no backslash escaping is needed
-    # and the outer script's variables are not expanded inside it.
+    TESTS_DIR="$HONEYPOT_HOME/scripts/smoke-tests"
+    mkdir -p "$TESTS_DIR/integrations"
+
+    # --- Main loader ---
     {
         echo "#!/bin/bash"
         echo "SSH_PORT=${SSH_PORT}"
     } > "$HONEYPOT_HOME/scripts/smoke-test.sh"
 
-    cat >> "$HONEYPOT_HOME/scripts/smoke-test.sh" << 'SMOKEEOF'
+    cat >> "$HONEYPOT_HOME/scripts/smoke-test.sh" << 'LOADEREOF'
 
+TESTS_DIR="/opt/honeypot/scripts/smoke-tests"
 echo "=== Honeypot Kit Smoke Test ==="
 PASS=0; FAIL=0; WARN=0
 
-# 1. Process check
+# Load core test fragments in order
+for test_file in "$TESTS_DIR"/[0-9]*.sh; do
+    [ -f "$test_file" ] && source "$test_file"
+done
+
+# Load integration test fragments if integration is installed
+for intg_dir in /opt/honeypot/integrations/*/; do
+    if [ -f "${intg_dir}.installed" ]; then
+        intg_name=$(basename "$intg_dir")
+        test_file="$TESTS_DIR/integrations/${intg_name}.sh"
+        [ -f "$test_file" ] && source "$test_file"
+    fi
+done
+
+echo ""
+echo "Results: $PASS passed, $WARN warnings, $FAIL failed"
+[ "$FAIL" -eq 0 ] && exit 0 || exit 1
+LOADEREOF
+
+    chmod +x "$HONEYPOT_HOME/scripts/smoke-test.sh"
+
+    # --- 00-core.sh: Cowrie and system basics ---
+    {
+        echo "#!/bin/bash"
+        echo "# Core honeypot checks"
+        echo "SSH_PORT=\${SSH_PORT:-${SSH_PORT}}"
+    } > "$TESTS_DIR/00-core.sh"
+
+    cat >> "$TESTS_DIR/00-core.sh" << 'COREEOF'
+
+# Cowrie process
 if pgrep -u cowrie > /dev/null 2>&1; then
     echo "  [PASS] Cowrie process running"; ((PASS++))
 else
     echo "  [FAIL] No Cowrie process found"; ((FAIL++))
 fi
 
-# 2. Cowrie port check
+# Cowrie port
 if ss -tlnp | grep -q ':22\b'; then
     echo "  [PASS] Cowrie listening on port 22"; ((PASS++))
 elif ss -tlnp | grep -q ':2222\b'; then
@@ -507,27 +539,27 @@ else
     echo "  [FAIL] Nothing listening on port 22"; ((FAIL++))
 fi
 
-# 3. Real SSH check on configured port
+# Real SSH
 if ss -tlnp | grep -q ":${SSH_PORT}\b"; then
     echo "  [PASS] Real SSH listening on port ${SSH_PORT}"; ((PASS++))
 else
     echo "  [WARN] Real SSH not found on port ${SSH_PORT}"; ((WARN++))
 fi
 
-# 4. Log file exists and was written recently
-LOG="/opt/honeypot/cowrie/var/log/cowrie/cowrie.log"
+# Cowrie JSON log
+LOG="/opt/honeypot/cowrie/var/log/cowrie/cowrie.json"
 if [ -f "$LOG" ]; then
     AGE=$(( $(date +%s) - $(stat -c %Y "$LOG") ))
     if [ "$AGE" -lt 600 ]; then
-        echo "  [PASS] Log file active (last write ${AGE}s ago)"; ((PASS++))
+        echo "  [PASS] Cowrie JSON log active (last write ${AGE}s ago)"; ((PASS++))
     else
-        echo "  [WARN] Log file exists but last write was ${AGE}s ago"; ((WARN++))
+        echo "  [WARN] Cowrie JSON log exists but last write was ${AGE}s ago"; ((WARN++))
     fi
 else
-    echo "  [FAIL] No log file found"; ((FAIL++))
+    echo "  [FAIL] No Cowrie JSON log found at $LOG"; ((FAIL++))
 fi
 
-# 5. Disk
+# Disk
 DISK=$(df / | awk 'NR==2 {print $5}' | sed 's/%//')
 if [ "$DISK" -lt 85 ]; then
     echo "  [PASS] Disk OK (${DISK}%)"; ((PASS++))
@@ -535,49 +567,133 @@ else
     echo "  [FAIL] Disk high (${DISK}%)"; ((FAIL++))
 fi
 
-# 6. Time sync
+# Time sync
 if timedatectl status 2>/dev/null | grep -qi "synchronized: yes"; then
     echo "  [PASS] Time synchronized"; ((PASS++))
 else
     echo "  [WARN] Time not yet synchronized"; ((WARN++))
 fi
+COREEOF
 
-# 7. CLI tool present
+    # --- 10-cli.sh: CLI and TUI tools ---
+    cat > "$TESTS_DIR/10-cli.sh" << 'CLIEOF'
+#!/bin/bash
+# CLI and TUI checks
+
 if command -v honeypot-kit > /dev/null 2>&1; then
-    echo "  [PASS] honeypot-kit CLI installed"; ((PASS++))
+    VERSION=$(honeypot-kit --version 2>/dev/null | grep -o '[0-9]*' | head -1)
+    echo "  [PASS] honeypot-kit CLI installed (v${VERSION:-?})"; ((PASS++))
 else
     echo "  [WARN] honeypot-kit CLI not found"; ((WARN++))
 fi
 
-# 8. Auto-update timer (warn only if not present - may have been declined)
+if [ -x /usr/local/bin/hk ]; then
+    echo "  [PASS] hk TUI installed"; ((PASS++))
+else
+    echo "  [WARN] hk TUI not found (run: sudo honeypot-kit update now)"; ((WARN++))
+fi
+CLIEOF
+
+    # --- 20-hardware.sh: OLED and LED if enabled ---
+    cat > "$TESTS_DIR/20-hardware.sh" << 'HWEOF'
+#!/bin/bash
+# Hardware module checks (only if enabled in config)
+
+CONF="/opt/honeypot/honeypot-kit.conf"
+[ -f "$CONF" ] || exit 0
+
+OLED_ON=$(python3 -c "
+import configparser, sys
+c = configparser.ConfigParser()
+c.read('$CONF')
+print(c.get('oled','enabled',fallback='false').lower())
+" 2>/dev/null)
+
+LED_ON=$(python3 -c "
+import configparser, sys
+c = configparser.ConfigParser()
+c.read('$CONF')
+print(c.get('led','enabled',fallback='false').lower())
+" 2>/dev/null)
+
+MON_OK=$(systemctl is-active honeypot-monitor 2>/dev/null)
+
+if [ "$OLED_ON" = "true" ] || [ "$LED_ON" = "true" ]; then
+    if [ "$MON_OK" = "active" ]; then
+        echo "  [PASS] Hardware monitor service running"; ((PASS++))
+    else
+        echo "  [FAIL] Hardware monitor service not running (OLED/LED enabled but monitor stopped)"; ((FAIL++))
+    fi
+fi
+
+if [ "$OLED_ON" = "true" ]; then
+    if [ -e /dev/i2c-1 ]; then
+        echo "  [PASS] I2C enabled (OLED configured)"; ((PASS++))
+    else
+        echo "  [WARN] I2C not detected but OLED enabled - reboot if just installed"; ((WARN++))
+    fi
+fi
+
+if [ "$LED_ON" = "true" ]; then
+    echo "  [PASS] LED indicators enabled"; ((PASS++))
+fi
+
+# Login alert state
+STATE="/opt/honeypot/monitor-state.json"
+if [ -f "$STATE" ]; then
+    ALERT=$(python3 -c "import json; d=json.load(open('$STATE')); print(d.get('login_history',False))" 2>/dev/null)
+    if [ "$ALERT" = "True" ]; then
+        echo "  [WARN] Login alert active - run: sudo honeypot-kit led clear-alert"; ((WARN++))
+    fi
+fi
+HWEOF
+
+    # --- 30-autoupdate.sh: Update timer ---
+    cat > "$TESTS_DIR/30-autoupdate.sh" << 'UPDATEEOF'
+#!/bin/bash
+# Auto-update timer check
+
 if systemctl is-enabled --quiet honeypot-update.timer 2>/dev/null; then
     echo "  [PASS] Auto-update timer enabled"; ((PASS++))
 else
     echo "  [INFO] Auto-update timer not enabled (declined at install or disabled)"
 fi
+UPDATEEOF
 
-# 9. I2C interface
-if [ -e /dev/i2c-1 ]; then
-    echo "  [PASS] I2C enabled (/dev/i2c-1 present)"; ((PASS++))
-else
-    echo "  [WARN] I2C not detected - OLED will not work; reboot if just installed"; ((WARN++))
-fi
+    chmod +x "$TESTS_DIR"/*.sh
 
-echo ""
-echo "Results: $PASS passed, $WARN warnings, $FAIL failed"
-[ "$FAIL" -eq 0 ] && exit 0 || exit 1
-SMOKEEOF
+    # --- OpenAI integration test fragment (downloaded on install) ---
+    # Written to integrations/openai.sh by openai install.sh at integration install time
+    # Placeholder installed here so the path exists
+    cat > "$TESTS_DIR/integrations/README.md" << 'READMEEOF'
+# Integration Smoke Test Fragments
 
-    chmod +x "$HONEYPOT_HOME/scripts/smoke-test.sh"
+Each file here is named after an integration (e.g. openai.sh, grafana.sh).
+It is automatically sourced by smoke-test.sh if that integration is installed
+(i.e. /opt/honeypot/integrations/<name>/.installed exists).
+
+Integration install scripts should copy their smoke test fragment here during
+installation. The fragment sources shared PASS/FAIL/WARN counters.
+
+Example fragment (integrations/myintegration.sh):
+
+    #!/bin/bash
+    if [ -f "/opt/honeypot/integrations/myintegration/config.json" ]; then
+        echo "  [PASS] myintegration config present"; ((PASS++))
+    else
+        echo "  [FAIL] myintegration config missing"; ((FAIL++))
+    fi
+READMEEOF
 
     if [ ! -f "$HONEYPOT_HOME/scripts/smoke-test.sh" ]; then
         log_warn "smoke-test.sh failed to write."
     else
-        log_info "Smoke test installed at $HONEYPOT_HOME/scripts/smoke-test.sh"
+        log_info "Smoke test loader installed at $HONEYPOT_HOME/scripts/smoke-test.sh"
+        log_info "Test fragments in $TESTS_DIR/"
     fi
 }
 
-###############################################################################
+
 # DEFAULT CONFIG FILE
 ###############################################################################
 

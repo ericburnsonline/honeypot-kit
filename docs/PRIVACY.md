@@ -1,6 +1,6 @@
 # Privacy Disclosure
 
-**Last updated:** 2026-09-  
+**Last updated:** 2026-09-04  
 **Project:** Honeypot Kit  
 **Maintainer:** Eric Burns / Interhouse Solutions (burns@interhouse.com)
 

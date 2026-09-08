@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Honeypot Kit CLI
-Version: 8
+Version: 9
 Manage hardware modules (OLED display, status LEDs) for Honeypot Kit.
 
 Usage:
@@ -87,7 +87,7 @@ def _systemctl(action, service=SERVICE):
         return False, str(e)
 
 
-VERSION = "8"
+VERSION = "9"
 
 
 @click.group()
@@ -452,10 +452,14 @@ def tft_enable():
     if not os.path.exists("/dev/fb1"):
         click.echo("WARNING: /dev/fb1 not found.")
         click.echo("  Install the display driver first:")
-        click.echo("  http://www.lcdwiki.com/MHS-3.5inch_RPi_Display")
+        click.echo("  sudo honeypot-kit tft install-driver")
         click.echo("")
     # Warn about GPIO conflict
     config = load_config()
+    if not config.has_section("tft"):
+        config.add_section("tft")
+        config["tft"]["fb_device"] = "/dev/fb1"
+        config["tft"]["resolution"] = "320x480"
     if config.get("led", "enabled", fallback="false").lower() == "true":
         click.echo("WARNING: LED module is currently enabled.")
         click.echo("  The SPI TFT display uses GPIO pins - LED module will not work")

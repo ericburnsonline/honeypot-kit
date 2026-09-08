@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Honeypot Kit CLI
-Version: 6
+Version: 8
 Manage hardware modules (OLED display, status LEDs) for Honeypot Kit.
 
 Usage:
@@ -87,7 +87,7 @@ def _systemctl(action, service=SERVICE):
         return False, str(e)
 
 
-VERSION = "6"
+VERSION = "8"
 
 
 @click.group()
@@ -120,6 +120,18 @@ def status():
     click.echo(f"  OLED Display    : {oled_status}")
     click.echo(f"    I2C address   : {oled_addr}")
     click.echo(f"    Resolution    : {oled_res}")
+    click.echo("")
+
+    # TFT
+    tft_enabled = config["tft"].get("enabled", "false").lower() == "true" if "tft" in config else False
+    tft_fb      = config["tft"].get("fb_device", "/dev/fb1") if "tft" in config else "/dev/fb1"
+    tft_res     = config["tft"].get("resolution", "320x480") if "tft" in config else "320x480"
+    tft_status  = click.style("ENABLED",  fg="green")  if tft_enabled \
+                  else click.style("disabled", fg="yellow")
+
+    click.echo(f"  TFT Display     : {tft_status}")
+    click.echo(f"    Framebuffer   : {tft_fb}")
+    click.echo(f"    Resolution    : {tft_res}")
     click.echo("")
 
     # LED
@@ -419,6 +431,252 @@ def led_test():
 
 
 # ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# TFT DISPLAY
+# ---------------------------------------------------------------------------
+
+VALID_TFT_RESOLUTIONS = ["320x480", "480x320", "320x240", "240x320"]
+
+
+@cli.group()
+def tft():
+    """Manage the SPI TFT display module."""
+    pass
+
+
+@tft.command("enable")
+def tft_enable():
+    """Enable the SPI TFT display."""
+    require_root()
+    if not os.path.exists("/dev/fb1"):
+        click.echo("WARNING: /dev/fb1 not found.")
+        click.echo("  Install the display driver first:")
+        click.echo("  http://www.lcdwiki.com/MHS-3.5inch_RPi_Display")
+        click.echo("")
+    # Warn about GPIO conflict
+    config = load_config()
+    if config.get("led", "enabled", fallback="false").lower() == "true":
+        click.echo("WARNING: LED module is currently enabled.")
+        click.echo("  The SPI TFT display uses GPIO pins - LED module will not work")
+        click.echo("  when the TFT display is connected.")
+        click.echo("")
+    config["tft"]["enabled"] = "true"
+    save_config(config)
+    _systemctl("enable", "honeypot-monitor")
+    click.echo("TFT display enabled.")
+    click.echo("Start or restart the monitor: sudo honeypot-kit monitor start")
+
+
+@tft.command("disable")
+def tft_disable():
+    """Disable the SPI TFT display."""
+    require_root()
+    config = load_config()
+    config["tft"]["enabled"] = "false"
+    save_config(config)
+    oled_on = config.get("oled", "enabled", fallback="false").lower() == "true"
+    led_on  = config.get("led",  "enabled", fallback="false").lower() == "true"
+    if not oled_on and not led_on:
+        _systemctl("disable", "honeypot-monitor")
+        click.echo("TFT display disabled. Monitor service disabled (no modules active).")
+    else:
+        click.echo("TFT display disabled. Other modules still active.")
+    click.echo("Restart the monitor: sudo honeypot-kit monitor restart")
+
+
+@tft.command("set-resolution")
+@click.argument("resolution")
+def tft_set_resolution(resolution):
+    """Set the TFT display resolution (320x480, 480x320, etc)."""
+    require_root()
+    if resolution not in VALID_TFT_RESOLUTIONS:
+        click.echo(f"ERROR: Unsupported resolution '{resolution}'.")
+        click.echo(f"  Supported: {', '.join(VALID_TFT_RESOLUTIONS)}")
+        sys.exit(1)
+    config = load_config()
+    if "tft" not in config:
+        config["tft"] = {}
+    config["tft"]["resolution"] = resolution
+    save_config(config)
+    click.echo(f"TFT resolution set to {resolution}.")
+
+
+@tft.command("set-device")
+@click.argument("device")
+def tft_set_device(device):
+    """Set the framebuffer device path (default: /dev/fb1)."""
+    require_root()
+    if not device.startswith("/dev/fb"):
+        click.echo(f"ERROR: Expected a framebuffer device like /dev/fb1, got: {device}")
+        sys.exit(1)
+    config = load_config()
+    if "tft" not in config:
+        config["tft"] = {}
+    config["tft"]["fb_device"] = device
+    save_config(config)
+    click.echo(f"TFT framebuffer device set to {device}.")
+
+
+@tft.command("test")
+def tft_test():
+    """Test the TFT display by rendering a test image."""
+    require_root()
+    config = load_config()
+    fb     = config.get("tft", "fb_device",  fallback="/dev/fb1")
+    res    = config.get("tft", "resolution", fallback="320x480")
+
+    if not os.path.exists(fb):
+        click.echo(f"ERROR: Framebuffer device {fb} not found.")
+        click.echo("  Install the display driver first:")
+        click.echo("  http://www.lcdwiki.com/MHS-3.5inch_RPi_Display")
+        sys.exit(1)
+
+    try:
+        import numpy as np
+        from PIL import Image, ImageDraw, ImageFont
+
+        w, h = map(int, res.split("x"))
+        image = Image.new("RGB", (w, h), color=(15, 15, 25))
+        draw  = ImageDraw.Draw(image)
+        font  = ImageFont.load_default()
+
+        draw.rectangle([(0, 0), (w, 30)], fill=(30, 30, 60))
+        draw.text((8, 8),   "Honeypot Kit",      font=font, fill=(0, 200, 220))
+        draw.text((8, 50),  "TFT Display OK",    font=font, fill=(50, 205, 50))
+        draw.text((8, 70),  f"Device: {fb}",     font=font, fill=(200, 200, 200))
+        draw.text((8, 90),  f"Res:    {res}",    font=font, fill=(200, 200, 200))
+
+        arr   = np.array(image.convert("RGB"), dtype=np.uint16)
+        r     = (arr[:, :, 0] >> 3).astype(np.uint16)
+        g     = (arr[:, :, 1] >> 2).astype(np.uint16)
+        b     = (arr[:, :, 2] >> 3).astype(np.uint16)
+        rgb565 = ((r << 11) | (g << 5) | b).tobytes()
+
+        with open(fb, "wb") as f:
+            f.write(rgb565)
+
+        click.echo(f"TFT test OK - check your display ({res} @ {fb}).")
+
+    except ImportError as e:
+        click.echo(f"ERROR: Missing library - {e}")
+        click.echo("  Run: sudo apt-get install python3-numpy python3-pil")
+        sys.exit(1)
+    except PermissionError:
+        click.echo(f"ERROR: Permission denied on {fb}.")
+        click.echo("  Add user to video group: sudo usermod -a -G video $USER")
+        click.echo("  Then log out and back in.")
+        sys.exit(1)
+    except Exception as e:
+        click.echo(f"ERROR: {e}")
+        sys.exit(1)
+
+
+@tft.command("install-driver")
+def tft_install_driver():
+    """Install the ILI9486 SPI display driver (requires internet + reboot).
+
+    Uses the goodtft LCD-show repository which works correctly on
+    Debian Trixie 64-bit. The lcdwiki installer supplied in the box
+    does NOT work on Trixie - use this command instead.
+
+    What this does:
+      1. Installs git and cmake if needed
+      2. Clones github.com/goodtft/LCD-show
+      3. Runs MHS35-show to install kernel driver
+      4. System reboots automatically
+
+    After reboot:
+      /dev/fb1 will exist and the display will be active.
+      Run: sudo honeypot-kit tft enable
+           sudo honeypot-kit tft test
+           sudo honeypot-kit monitor start
+
+    IMPORTANT: When the SPI display driver is active, GPIO pins are
+    unavailable. The LED traffic light module cannot be used.
+    """
+    require_root()
+
+    click.echo("")
+    click.echo("=== TFT Display Driver Installer ===")
+    click.echo("")
+    click.echo("  Display  : MHS-3.5inch (ILI9486, 320x480, SPI)")
+    click.echo("  Driver   : goodtft/LCD-show (Trixie 64-bit compatible)")
+    click.echo("  Source   : https://github.com/goodtft/LCD-show")
+    click.echo("")
+    click.echo("WARNING: This will:")
+    click.echo("  - Modify /boot/firmware/config.txt")
+    click.echo("  - Install kernel SPI display driver")
+    click.echo("  - Reboot the system automatically")
+    click.echo("  - Disable GPIO pins (LED module incompatible after install)")
+    click.echo("")
+
+    if not click.confirm("Proceed with driver installation?", default=False):
+        click.echo("Cancelled.")
+        return
+
+    click.echo("")
+
+    # Check internet connectivity
+    click.echo("Checking network...")
+    out, rc = subprocess.run(
+        ["wget", "-q", "--spider", "https://github.com", "--timeout=10"],
+        capture_output=True
+    ).returncode, 0
+    if out != 0:
+        click.echo("ERROR: Cannot reach GitHub. Check network connection.")
+        sys.exit(1)
+    click.echo("  Network OK.")
+
+    # Install dependencies
+    click.echo("Installing dependencies...")
+    result = subprocess.run(
+        ["apt-get", "install", "-y", "git", "cmake"],
+        capture_output=True, text=True
+    )
+    if result.returncode != 0:
+        click.echo(f"ERROR: Could not install dependencies.")
+        click.echo(result.stderr[:200])
+        sys.exit(1)
+    click.echo("  Dependencies OK.")
+
+    # Clone goodtft/LCD-show (not the lcdwiki one - doesn't work on Trixie)
+    import tempfile
+    work_dir = "/tmp/LCD-show-install"
+    click.echo(f"Cloning goodtft/LCD-show to {work_dir}...")
+
+    subprocess.run(["rm", "-rf", work_dir], capture_output=True)
+    result = subprocess.run(
+        ["git", "clone", "https://github.com/goodtft/LCD-show.git", work_dir],
+        capture_output=True, text=True
+    )
+    if result.returncode != 0:
+        click.echo("ERROR: Could not clone LCD-show repository.")
+        click.echo(result.stderr[:200])
+        sys.exit(1)
+    click.echo("  Cloned OK.")
+
+    # Check MHS35-show exists
+    show_script = os.path.join(work_dir, "MHS35-show")
+    if not os.path.exists(show_script):
+        click.echo("ERROR: MHS35-show script not found in repository.")
+        click.echo("  The repository structure may have changed.")
+        click.echo("  Manual install: cd /tmp/LCD-show-install && sudo ./MHS35-show")
+        sys.exit(1)
+
+    # Make scripts executable
+    subprocess.run(["chmod", "-R", "755", work_dir], capture_output=True)
+
+    click.echo("")
+    click.echo("Installing display driver...")
+    click.echo("(System will reboot automatically when complete)")
+    click.echo("")
+
+    # Run the driver installer - this will reboot
+    os.chdir(work_dir)
+    os.execv("/bin/bash", ["/bin/bash", show_script])
+
+
 # MONITOR SERVICE
 # ---------------------------------------------------------------------------
 

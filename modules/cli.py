@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Honeypot Kit CLI
-Version: 9
+Version: 10
 Manage hardware modules (OLED display, status LEDs) for Honeypot Kit.
 
 Usage:
@@ -87,7 +87,7 @@ def _systemctl(action, service=SERVICE):
         return False, str(e)
 
 
-VERSION = "9"
+VERSION = "10"
 
 
 @click.group()
@@ -855,12 +855,63 @@ def update_disable():
         sys.exit(1)
 
 
+@update.command("set-branch")
+@click.argument("branch")
+def update_set_branch(branch):
+    """Set the GitHub branch to pull updates from (default: main).
+
+    Use 'main' for stable releases. Use a feature branch to test
+    unreleased changes before they are merged.
+
+    Example:
+      sudo honeypot-kit update set-branch dev
+      sudo honeypot-kit update now
+    """
+    require_root()
+    import urllib.request
+    # Verify branch exists
+    api_url = "https://api.github.com/repos/ericburnsonline/honeypot-kit/branches"
+    try:
+        with urllib.request.urlopen(api_url, timeout=10) as resp:
+            data = resp.read().decode()
+            if f'"name": "{branch}"' not in data:
+                click.echo(f"ERROR: Branch '{branch}' not found in repository.")
+                click.echo(f"  Check available branches at: https://github.com/ericburnsonline/honeypot-kit/branches")
+                sys.exit(1)
+    except Exception:
+        click.echo(f"WARNING: Could not verify branch '{branch}' exists (no network?).")
+        click.echo("  Setting branch anyway.")
+
+    config = load_config()
+    if "updates" not in config:
+        config.add_section("updates")
+    config["updates"]["branch"] = branch
+    save_config(config)
+    click.echo(f"Branch set to '{branch}'.")
+    click.echo(f"Next update will pull from: https://github.com/ericburnsonline/honeypot-kit/tree/{branch}")
+    click.echo("Run now: sudo honeypot-kit update now")
+
+
+@update.command("branch")
+def update_branch():
+    """Show the current update branch."""
+    config = load_config()
+    branch = config.get("updates", "branch", fallback="main")
+    click.echo(f"Current branch: {branch}")
+    click.echo(f"Source: https://github.com/ericburnsonline/honeypot-kit/tree/{branch}")
+
 
 # ---------------------------------------------------------------------------
 # INTEGRATION MANAGER
 # ---------------------------------------------------------------------------
 
-GITHUB_RAW      = "https://raw.githubusercontent.com/ericburnsonline/honeypot-kit/main"
+def _get_github_raw():
+    """Get GitHub raw URL using configured branch."""
+    config = load_config()
+    branch = config.get("updates", "branch", fallback="main")
+    return f"https://raw.githubusercontent.com/ericburnsonline/honeypot-kit/{branch}"
+
+GITHUB_RAW      = _get_github_raw()
 MANIFEST_URL    = f"{GITHUB_RAW}/integrations/manifest.json"
 INTEGRATIONS_DIR = "/opt/honeypot/integrations"
 

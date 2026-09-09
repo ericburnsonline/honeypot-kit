@@ -4,9 +4,23 @@ Post-install acceptance checklist. Run through this after every fresh install
 or major update. Check off each item as you go. Stop at any failure and note
 the error before continuing.
 
-**Script version tested:** v13
+**Script version tested:** v16
 **Platform tested:** Raspberry Pi 4, 64-bit Debian Trixie
-**Last updated:** 2026-08-23
+**Last updated:** 2026-09-08
+
+---
+
+## Before You Start
+
+**Confirm your branch:**
+```bash
+honeypot-kit update branch
+```
+This guide assumes you installed from `main`. If you installed from another
+branch, results may differ - non-main branches are works in progress and
+may be intentionally incomplete or broken. If you are having unexpected
+failures, reinstall from `main` and re-run this checklist before reporting
+an issue.
 
 ---
 

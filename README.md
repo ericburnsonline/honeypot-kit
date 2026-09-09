@@ -69,7 +69,7 @@ This is a learning tool first, production monitoring second.
 ## Hardware Requirements
 
 ### Minimum
-- Raspberry Pi 4 (4GB RAM minimum)
+- Raspberry Pi 4 (4GB RAM should be sufficient; all testing to date has been on 8GB models - 4GB is untested but expected to work)
 - Micro SD card (64GB minimum)
 - USB-C power supply (5V 3A)
 - Ethernet cable
@@ -95,8 +95,6 @@ sudo bash install-honeypot.sh
 ```
 
 Follow prompts for network interface, hostname, SSH port, and optional auto-updates. Installation takes approximately 11 minutes unattended after the prompts.
-
-The installer will ask which GitHub branch to install from. **Always choose `main` unless you have a specific reason not to.** The `main` branch is tested and stable. Other branches are works in progress and may be broken.
 
 After install, launch the TUI:
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Honeypot Kit CLI
-Version: 10
+Version: 11
 Manage hardware modules (OLED display, status LEDs) for Honeypot Kit.
 
 Usage:
@@ -87,7 +87,7 @@ def _systemctl(action, service=SERVICE):
         return False, str(e)
 
 
-VERSION = "10"
+VERSION = "11"
 
 
 @click.group()
@@ -125,7 +125,7 @@ def status():
     # TFT
     tft_enabled = config["tft"].get("enabled", "false").lower() == "true" if "tft" in config else False
     tft_fb      = config["tft"].get("fb_device", "/dev/fb1") if "tft" in config else "/dev/fb1"
-    tft_res     = config["tft"].get("resolution", "320x480") if "tft" in config else "320x480"
+    tft_res     = config["tft"].get("resolution", "480x320") if "tft" in config else "480x320"
     tft_status  = click.style("ENABLED",  fg="green")  if tft_enabled \
                   else click.style("disabled", fg="yellow")
 
@@ -171,15 +171,22 @@ def oled():
 def oled_enable():
     """Enable the OLED display."""
     require_root()
+    config = load_config()
+
+    # Block if TFT is enabled - SPI display occupies GPIO/I2C header
+    if config.get("tft", "enabled", fallback="false").lower() == "true":
+        click.echo("ERROR: TFT SPI display is currently enabled.")
+        click.echo("  The SPI display occupies the GPIO header - OLED cannot be used simultaneously.")
+        click.echo("  Disable TFT first: sudo honeypot-kit tft disable")
+        sys.exit(1)
+
     if not os.path.exists("/dev/i2c-1"):
         click.echo("WARNING: I2C not detected (/dev/i2c-1 missing).")
         click.echo("  Reboot if I2C was just enabled by the install script.")
         click.echo("  Or enable manually: sudo raspi-config -> Interface Options -> I2C")
         click.echo("")
-    config = load_config()
     config["oled"]["enabled"] = "true"
     save_config(config)
-    # Enable systemd service so monitor starts on reboot
     _systemctl("enable", "honeypot-monitor")
     click.echo("OLED display enabled.")
     click.echo("Start or restart the monitor: sudo honeypot-kit monitor start")
@@ -318,9 +325,17 @@ def led_enable():
     """Enable the LED status indicators."""
     require_root()
     config = load_config()
+
+    # Block if TFT is enabled - SPI display occupies GPIO pins used by LEDs
+    if config.get("tft", "enabled", fallback="false").lower() == "true":
+        click.echo("ERROR: TFT SPI display is currently enabled.")
+        click.echo("  The SPI display occupies GPIO pins - LED module cannot be used simultaneously.")
+        click.echo("  Disable TFT first: sudo honeypot-kit tft disable")
+        click.echo("  Note: The TFT display shows virtual LED indicators on screen instead.")
+        sys.exit(1)
+
     config["led"]["enabled"] = "true"
     save_config(config)
-    # Enable systemd service so monitor starts on reboot
     _systemctl("enable", "honeypot-monitor")
     click.echo("LED indicators enabled.")
     click.echo("Start or restart the monitor: sudo honeypot-kit monitor start")
@@ -459,11 +474,17 @@ def tft_enable():
     if not config.has_section("tft"):
         config.add_section("tft")
         config["tft"]["fb_device"] = "/dev/fb1"
-        config["tft"]["resolution"] = "320x480"
+        config["tft"]["resolution"] = "480x320"
     if config.get("led", "enabled", fallback="false").lower() == "true":
         click.echo("WARNING: LED module is currently enabled.")
         click.echo("  The SPI TFT display uses GPIO pins - LED module will not work")
         click.echo("  when the TFT display is connected.")
+        click.echo("  Disable LEDs: sudo honeypot-kit led disable")
+        click.echo("")
+    if config.get("oled", "enabled", fallback="false").lower() == "true":
+        click.echo("WARNING: OLED display is currently enabled.")
+        click.echo("  The SPI TFT display may conflict with I2C OLED on this hardware.")
+        click.echo("  Disable OLED: sudo honeypot-kit oled disable")
         click.echo("")
     config["tft"]["enabled"] = "true"
     save_config(config)
@@ -528,7 +549,7 @@ def tft_test():
     require_root()
     config = load_config()
     fb     = config.get("tft", "fb_device",  fallback="/dev/fb1")
-    res    = config.get("tft", "resolution", fallback="320x480")
+    res    = config.get("tft", "resolution", fallback="480x320")
 
     if not os.path.exists(fb):
         click.echo(f"ERROR: Framebuffer device {fb} not found.")
@@ -604,7 +625,7 @@ def tft_install_driver():
     click.echo("")
     click.echo("=== TFT Display Driver Installer ===")
     click.echo("")
-    click.echo("  Display  : MHS-3.5inch (ILI9486, 320x480, SPI)")
+    click.echo("  Display  : MHS-3.5inch (ILI9486, 480x320 landscape, SPI)")
     click.echo("  Driver   : goodtft/LCD-show (Trixie 64-bit compatible)")
     click.echo("  Source   : https://github.com/goodtft/LCD-show")
     click.echo("")

@@ -252,6 +252,21 @@ Should show `"enabled": true`. Also check the API key is set.
 
 ## General
 
+**What branch should I install from?**
+
+Always use `main` unless you have been specifically directed to use another branch. The `main` branch is tested on real hardware before anything is merged into it. Other branches are active development and may be incomplete, broken, or change without notice. If you installed from a non-main branch and are having problems, reinstall from `main` first before reporting an issue.
+
+To check which branch your installation is using:
+```bash
+honeypot-kit update branch
+```
+
+To switch to main:
+```bash
+sudo honeypot-kit update set-branch main
+sudo honeypot-kit update now
+```
+
 **Port 111 (rpcbind) shows up in nmap. Is that a problem?**
 
 No. rpcbind is normal on Raspberry Pi OS and is not exposed to the internet

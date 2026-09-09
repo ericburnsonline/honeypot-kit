@@ -1,7 +1,7 @@
 #!/bin/bash
 ###############################################################################
 # Honeypot Kit - Install Script
-# Version: 15
+# Version: 16
 # Educational SSH honeypot (Cowrie) with health checks and OPSEC hardening
 #
 # Tested on: Raspberry Pi 4, 64-bit Raspberry Pi OS Debian Trixie (2026-06-18)
@@ -19,8 +19,11 @@
 #     permissions so pi user (monitor daemon) can write login_history state
 ###############################################################################
 
-VERSION="15"
-GITHUB_RAW="https://raw.githubusercontent.com/ericburnsonline/honeypot-kit/main"
+VERSION="16"
+GITHUB_REPO="https://github.com/ericburnsonline/honeypot-kit"
+GITHUB_API="https://api.github.com/repos/ericburnsonline/honeypot-kit/branches"
+GITHUB_BRANCH="main"
+GITHUB_RAW="https://raw.githubusercontent.com/ericburnsonline/honeypot-kit/${GITHUB_BRANCH}"
 
 # Colors
 RED='\033[0;31m'
@@ -179,6 +182,33 @@ gather_configuration() {
         AUTO_UPDATE_ENABLED=false
     fi
 
+    # --- Branch selection ---
+    echo ""
+    echo "Checking available GitHub branches..."
+    BRANCHES=$(wget -qO- "$GITHUB_API" 2>/dev/null | \
+        grep '"name"' | sed 's/.*"name": "\(.*\)".*/\1/' | tr '\n' ' ')
+
+    if [ -z "$BRANCHES" ]; then
+        log_warn "Could not fetch branch list (no network or API limit). Using main."
+        GITHUB_BRANCH="main"
+    else
+        echo "Available branches: $BRANCHES"
+        echo "Use 'main' for stable tested code."
+        echo "Use a feature branch to test unreleased changes."
+        read -p "Install from branch [main]: " SELECTED_BRANCH
+        SELECTED_BRANCH=${SELECTED_BRANCH:-main}
+
+        # Validate branch exists
+        if echo "$BRANCHES" | grep -qw "$SELECTED_BRANCH"; then
+            GITHUB_BRANCH="$SELECTED_BRANCH"
+        else
+            log_warn "Branch '$SELECTED_BRANCH' not found. Falling back to main."
+            GITHUB_BRANCH="main"
+        fi
+    fi
+    GITHUB_RAW="https://raw.githubusercontent.com/ericburnsonline/honeypot-kit/${GITHUB_BRANCH}"
+    log_info "Installing from branch: $GITHUB_BRANCH"
+
     # --- Confirm ---
     echo ""
     echo "------------------------------------------------------------"
@@ -190,6 +220,7 @@ gather_configuration() {
     echo "  Cowrie honeypot   : port 22"
     echo "  Real SSH          : port $SSH_PORT"
     echo "  Auto-update       : $AUTO_UPDATE_ENABLED"
+    echo "  GitHub branch     : $GITHUB_BRANCH"
     echo "------------------------------------------------------------"
     echo ""
     read -p "Proceed with installation? [y/N]: " CONFIRM
@@ -699,7 +730,7 @@ READMEEOF
 
 install_config() {
     log_info "Writing default configuration file..."
-    cat > "$CONF_FILE" << 'CONFEOF'
+    cat > "$CONF_FILE" << CONFEOF
 [oled]
 enabled = false
 i2c_address = 0x3C
@@ -710,6 +741,14 @@ enabled = false
 pin_red = 17
 pin_yellow = 27
 pin_green = 22
+
+[tft]
+enabled = false
+fb_device = /dev/fb1
+resolution = 480x320
+
+[updates]
+branch = ${GITHUB_BRANCH}
 CONFEOF
     log_info "Config written to $CONF_FILE"
 }
@@ -794,13 +833,21 @@ install_auto_update() {
 # Never touches Cowrie or system packages.
 ###############################################################################
 
-GITHUB_RAW="https://raw.githubusercontent.com/ericburnsonline/honeypot-kit/main"
 HONEYPOT_HOME="/opt/honeypot"
 LOG_FILE="$HONEYPOT_HOME/logs/updates.log"
 MODULES_DIR="$HONEYPOT_HOME/modules"
 CLI_SCRIPT="/usr/local/bin/honeypot-kit"
 UPDATE_CONF="$HONEYPOT_HOME/honeypot-kit.conf"
 TIMESTAMP=$(date '+%Y-%m-%d %H:%M:%S')
+
+# Read branch from config (default to main)
+GITHUB_BRANCH=$(python3 -c "
+import configparser
+c = configparser.ConfigParser()
+c.read('$UPDATE_CONF')
+print(c.get('updates', 'branch', fallback='main'))
+" 2>/dev/null || echo "main")
+GITHUB_RAW="https://raw.githubusercontent.com/ericburnsonline/honeypot-kit/${GITHUB_BRANCH}"
 
 log_update() { echo "[$TIMESTAMP] $1" >> "$LOG_FILE"; }
 
@@ -962,6 +1009,32 @@ configure_i2c() {
     log_info "i2c-tools installed (run: i2cdetect -y 1)"
 }
 
+configure_display_manager() {
+    # If lightdm is installed, ensure it uses fb0 (HDMI) not fb1 (TFT).
+    # The goodtft SPI display driver redirects the framebuffer which can
+    # cause lightdm to render the desktop on the TFT display instead of HDMI.
+    if command -v lightdm > /dev/null 2>&1; then
+        log_info "Configuring lightdm to use HDMI (fb0) display..."
+
+        # Force Xorg to use fb0
+        mkdir -p /etc/X11/xorg.conf.d
+        cat > /etc/X11/xorg.conf.d/99-fbdev.conf << 'XORGEOF'
+Section "Device"
+    Identifier "fbdev"
+    Driver "fbdev"
+    Option "fbdev" "/dev/fb0"
+EndSection
+XORGEOF
+
+        # Set display-setup-script to ensure HDMI is primary
+        if ! grep -q "display-setup-script" /etc/lightdm/lightdm.conf 2>/dev/null; then
+            sed -i '/^\[Seat:\*\]/a display-setup-script=xrandr --output HDMI-A-1 --primary' \
+                /etc/lightdm/lightdm.conf 2>/dev/null || true
+        fi
+        log_info "Display manager configured for HDMI."
+    fi
+}
+
 harden_system() {
     log_info "Applying basic hardening..."
     sed -i 's/^#\?PermitRootLogin.*/PermitRootLogin prohibit-password/' /etc/ssh/sshd_config 2>/dev/null || true
@@ -1073,6 +1146,7 @@ main() {
     create_systemd_service
     create_monitor_service
     configure_i2c
+    configure_display_manager
     harden_system
 
     log_info "Starting Cowrie..."

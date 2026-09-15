@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Honeypot Kit CLI
-Version: 11
+Version: 12
 Manage hardware modules (OLED display, status LEDs) for Honeypot Kit.
 
 Usage:
@@ -87,7 +87,7 @@ def _systemctl(action, service=SERVICE):
         return False, str(e)
 
 
-VERSION = "11"
+VERSION = "12"
 
 
 @click.group()
@@ -601,13 +601,15 @@ def tft_test():
 def tft_install_driver():
     """Install the ILI9486 SPI display driver (requires internet + reboot).
 
-    Uses the goodtft LCD-show repository which works correctly on
+    Uses your fork of the goodtft LCD-show repository, maintained at
+    github.com/ericburnsonline/honeypot-kit-tft-driver for installation
+    reliability. Works correctly on
     Debian Trixie 64-bit. The lcdwiki installer supplied in the box
     does NOT work on Trixie - use this command instead.
 
     What this does:
       1. Installs git and cmake if needed
-      2. Clones github.com/goodtft/LCD-show
+      2. Clones github.com/ericburnsonline/honeypot-kit-tft-driver
       3. Runs MHS35-show to install kernel driver
       4. System reboots automatically
 
@@ -626,8 +628,8 @@ def tft_install_driver():
     click.echo("=== TFT Display Driver Installer ===")
     click.echo("")
     click.echo("  Display  : MHS-3.5inch (ILI9486, 480x320 landscape, SPI)")
-    click.echo("  Driver   : goodtft/LCD-show (Trixie 64-bit compatible)")
-    click.echo("  Source   : https://github.com/goodtft/LCD-show")
+    click.echo("  Driver   : ericburnsonline/honeypot-kit-tft-driver (Trixie 64-bit compatible)")
+    click.echo("  Source   : https://github.com/ericburnsonline/honeypot-kit-tft-driver")
     click.echo("")
     click.echo("WARNING: This will:")
     click.echo("  - Modify /boot/firmware/config.txt")
@@ -665,18 +667,19 @@ def tft_install_driver():
         sys.exit(1)
     click.echo("  Dependencies OK.")
 
-    # Clone goodtft/LCD-show (not the lcdwiki one - doesn't work on Trixie)
+    # Clone from maintained fork - known working on Trixie 64-bit
+    # Fork of goodtft/LCD-show maintained at ericburnsonline/honeypot-kit-tft-driver
     import tempfile
-    work_dir = "/tmp/LCD-show-install"
-    click.echo(f"Cloning goodtft/LCD-show to {work_dir}...")
+    work_dir = "/tmp/honeypot-kit-tft-driver"
+    click.echo(f"Cloning honeypot-kit-tft-driver to {work_dir}...")
 
     subprocess.run(["rm", "-rf", work_dir], capture_output=True)
     result = subprocess.run(
-        ["git", "clone", "https://github.com/goodtft/LCD-show.git", work_dir],
+        ["git", "clone", "https://github.com/ericburnsonline/honeypot-kit-tft-driver.git", work_dir],
         capture_output=True, text=True
     )
     if result.returncode != 0:
-        click.echo("ERROR: Could not clone LCD-show repository.")
+        click.echo("ERROR: Could not clone honeypot-kit-tft-driver repository.")
         click.echo(result.stderr[:200])
         sys.exit(1)
     click.echo("  Cloned OK.")
@@ -686,7 +689,7 @@ def tft_install_driver():
     if not os.path.exists(show_script):
         click.echo("ERROR: MHS35-show script not found in repository.")
         click.echo("  The repository structure may have changed.")
-        click.echo("  Manual install: cd /tmp/LCD-show-install && sudo ./MHS35-show")
+        click.echo("  Manual install: cd /tmp/honeypot-kit-tft-driver && sudo ./MHS35-show")
         sys.exit(1)
 
     # Make scripts executable

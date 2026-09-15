@@ -260,37 +260,19 @@ ls -la /dev/fb*
 If `/dev/fb1` is missing the driver did not install correctly. Re-run
 `sudo honeypot-kit tft install-driver`.
 
-**Step 4.3 - Disable tty1 autologin**
+**Step 4.3 - Disable desktop environment**
 
-The goodtft driver causes the Pi desktop to autostart on tty1 via autologin,
-which writes to the TFT display and competes with the Honeypot Kit dashboard.
-Disable it manually (this will be automated in a future install script update):
-
-```
-sudo mkdir -p /etc/systemd/system/getty@tty1.service.d/
-sudo bash -c 'cat > /etc/systemd/system/getty@tty1.service.d/autologin.conf << EOF
-[Service]
-ExecStart=
-ExecStart=-/sbin/agetty --noclear %I \$TERM
-EOF'
-sudo systemctl daemon-reload
-sudo systemctl restart getty@tty1
-```
-
-Also disable lightdm if it is enabled:
+The goodtft driver causes the Pi desktop (LXDE) to autostart on tty1 via
+autologin, writing to /dev/fb1 and competing with the Honeypot Kit dashboard.
+Run the automated fix:
 
 ```
-sudo systemctl disable lightdm
-sudo systemctl stop lightdm
+sudo honeypot-kit tft disable-desktop
 ```
 
-Kill any lingering desktop processes:
-
-```
-pkill lxpanel; pkill lxsession; pkill openbox; pkill pcmanfm
-```
-
-- [ ] Desktop processes no longer running: `ps aux | grep -E "lxpanel|lxsession" | grep -v grep` returns nothing
+- [ ] Command completes all 4 steps without error
+- [ ] Desktop processes no longer running: `ps aux | grep lxsession | grep -v grep` returns nothing
+- [ ] TFT dashboard visible with no desktop UI overlaid
 
 **Step 4.4 - Enable and test TFT display**
 

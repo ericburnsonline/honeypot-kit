@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Honeypot Kit CLI
-Version: 12
+Version: 13
 Manage hardware modules (OLED display, status LEDs) for Honeypot Kit.
 
 Usage:
@@ -87,7 +87,7 @@ def _systemctl(action, service=SERVICE):
         return False, str(e)
 
 
-VERSION = "12"
+VERSION = "13"
 
 
 @click.group()
@@ -703,6 +703,62 @@ def tft_install_driver():
     # Run the driver installer - this will reboot
     os.chdir(work_dir)
     os.execv("/bin/bash", ["/bin/bash", show_script])
+
+
+@tft.command("disable-desktop")
+def tft_disable_desktop():
+    """Stop the desktop environment from competing with the TFT dashboard.
+
+    The goodtft SPI display driver causes the Pi desktop (LXDE) to
+    autostart on tty1 via autologin, writing to /dev/fb1 and overlaying
+    the Honeypot Kit dashboard with desktop UI elements.
+
+    This command:
+      1. Disables tty1 autologin (stops LXDE autostart on boot)
+      2. Disables and stops lightdm
+      3. Kills any running desktop processes
+      4. Restarts the hardware monitor to reclaim the framebuffer
+
+    Safe to run multiple times. Does not affect SSH access.
+    HDMI will show a text console login after this change.
+    """
+    require_root()
+
+    click.echo("Disabling desktop environment for TFT display mode...")
+    click.echo("")
+
+    # Step 1 - disable tty1 autologin
+    click.echo("  [1/4] Disabling tty1 autologin...")
+    os.makedirs("/etc/systemd/system/getty@tty1.service.d", exist_ok=True)
+    autologin_conf = "/etc/systemd/system/getty@tty1.service.d/autologin.conf"
+    with open(autologin_conf, "w") as f:
+        f.write("[Service]\nExecStart=\nExecStart=-/sbin/agetty --noclear %I $TERM\n")
+
+    result = subprocess.run(["systemctl", "daemon-reload"], capture_output=True)
+    subprocess.run(["systemctl", "restart", "getty@tty1"], capture_output=True)
+    click.echo("      Done.")
+
+    # Step 2 - disable lightdm
+    click.echo("  [2/4] Disabling lightdm...")
+    subprocess.run(["systemctl", "disable", "lightdm"], capture_output=True)
+    subprocess.run(["systemctl", "stop",    "lightdm"], capture_output=True)
+    click.echo("      Done.")
+
+    # Step 3 - kill lingering desktop processes
+    click.echo("  [3/4] Stopping desktop processes...")
+    for proc in ["lxpanel", "lxsession", "openbox", "pcmanfm"]:
+        subprocess.run(["pkill", proc], capture_output=True)
+    click.echo("      Done.")
+
+    # Step 4 - restart monitor to reclaim framebuffer
+    click.echo("  [4/4] Restarting hardware monitor...")
+    subprocess.run(["systemctl", "restart", "honeypot-monitor"], capture_output=True)
+    click.echo("      Done.")
+
+    click.echo("")
+    click.echo("Desktop disabled. TFT display is now exclusively for Honeypot Kit.")
+    click.echo("HDMI will show a text console on next reboot.")
+    click.echo("To verify: ps aux | grep lxsession | grep -v grep  (should return nothing)")
 
 
 # MONITOR SERVICE

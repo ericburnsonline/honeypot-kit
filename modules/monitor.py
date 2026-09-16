@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Honeypot Kit - Hardware Monitor Daemon
-Version: 5
+Version: 6
 
 Drives the OLED display and LED status indicators based on live
 honeypot state. Reads Cowrie's JSON log and system metrics, updates
@@ -751,8 +751,8 @@ def _led_states_from_honeypot_state(led_state):
     states = {
         # state          green   yellow    red
         "healthy":      (True,   False,    False),
-        "login_history":(True,   False,    "blink"),
-        "active_session":(True,  "blink",  False),
+        "login_history":(True,   False,    True),
+        "active_session":(True,  True,     False),
         "high_rate":    (True,   True,     False),
         "warning":      (False,  True,     False),
         "cowrie_down":  (False,  "blink",  "blink"),

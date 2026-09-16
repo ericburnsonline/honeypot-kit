@@ -4,7 +4,9 @@ Educational SSH honeypot with modular hardware monitoring for Raspberry Pi.
 
 Deploy in 15-20 minutes. Monitor attacks in real-time with OLED display, LED indicators, and a full-screen terminal interface.
 
-✅ **Status:** Install script tested and working on RPi4 64-bit Debian Trixie. OLED display and LED status indicators tested and working on physical hardware. OpenAI session analysis integration working. See [Threat Model](docs/THREAT_MODEL.md) for design scope.
+![Honeypot Kit TFT Dashboard - Healthy State](docs/images/tft-healthy.jpg)
+
+✅ **Status:** Install script tested and working on RPi4 64-bit Debian Trixie. OLED display and LED status indicators tested and working on physical hardware. TFT SPI display dashboard tested and working. OpenAI session analysis integration working. See [Threat Model](docs/THREAT_MODEL.md) for design scope.
 
 ---
 
@@ -43,7 +45,15 @@ This is a learning tool first, production monitoring second.
 ### Hardware Modules (Optional)
 - **OLED Display:** Real-time IP address, attack count, active sessions, disk usage, uptime
 - **LED Status Indicators:** Color-coded status with flash patterns (Green=healthy, Yellow=active session, Red=login alert)
+- **TFT SPI Display:** Full-color 480x320 dashboard with virtual LED indicators - works in the MHS-3.5inch RPi4 case
 - **Display abstraction layer:** Pillow Image as universal render target - new display drivers are drop-in
+
+**TFT Display States:**
+
+| Healthy | Active Session | Login Alert |
+|---------|---------------|-------------|
+| ![Healthy](docs/images/tft-healthy.jpg) | ![Active Session](docs/images/tft-active-session.jpg) | ![Login Alert](docs/images/tft-login-alert.jpg) |
+| Green solid, system idle | Yellow lit, attacker connected | Red lit, login recorded |
 
 ### Interface
 - **TUI:** Full-screen terminal interface (`hk`) - status dashboard, session browser, hardware controls, log viewer
@@ -86,76 +96,17 @@ See [docs/HARDWARE_SETUP.md](docs/HARDWARE_SETUP.md) for wiring diagrams and GPI
 
 ---
 
-## Preparing Your SD Card
-
-Before installing Honeypot Kit you need a Raspberry Pi OS image flashed to
-a micro SD card with SSH enabled. The easiest way is Raspberry Pi Imager.
-
-**Step 1 - Download Raspberry Pi Imager**
-
-Get it from https://www.raspberrypi.com/software/ and install it on your
-Mac or Windows machine.
-
-**Step 2 - Flash the OS**
-
-- Open Raspberry Pi Imager
-- Choose Device: Raspberry Pi 4
-- Choose OS: Raspberry Pi OS (64-bit) - the full version, not Lite
-- Choose Storage: your micro SD card
-
-**Step 3 - Configure before flashing (important)**
-
-Click the settings gear icon (or press Ctrl+Shift+X) to open OS Customisation.
-Configure the following before flashing:
-
-- **Hostname:** something memorable (e.g. `honeypot01`)
-- **Username:** `pi` (or your preferred username)
-- **Password:** set a strong password
-- **Enable SSH:** check "Use password authentication"
-- **Locale:** set your timezone and keyboard layout
-- **WiFi:** optional - ethernet is recommended for a honeypot
-
-Click Save, then Write. This takes a few minutes.
-
-**Step 4 - Boot and connect**
-
-Insert the SD card into your Pi, connect ethernet, and power it on.
-Wait 60 seconds for first boot to complete. Find the Pi's IP address
-from your router's admin page, or try:
-
-```bash
-ssh pi@honeypot01.local
-# or by IP:
-ssh pi@<pi-ip-address>
-```
-
-Once SSH is working, proceed to Quick Start.
-
----
-
 ## Quick Start
 
 ```bash
-# On Raspberry Pi - download and run the install script
+# On Raspberry Pi
 wget https://raw.githubusercontent.com/ericburnsonline/honeypot-kit/main/install-honeypot.sh
 sudo bash install-honeypot.sh
 ```
 
-Follow prompts for network interface, hostname, SSH port, and optional
-auto-updates. Installation takes approximately 11-13 minutes unattended
-after the prompts.
+Follow prompts for network interface, hostname, SSH port, and optional auto-updates. Installation takes approximately 11 minutes unattended after the prompts.
 
-**Note:** The installer asks which GitHub branch to install from. Always
-choose `main` unless directed otherwise - other branches are works in
-progress and may be unstable.
-
-After install the system reboots. SSH back in on your new port (default 2222):
-
-```bash
-ssh -p 2222 pi@<pi-ip-address>
-```
-
-Then launch the TUI:
+After install, launch the TUI:
 
 ```bash
 hk
